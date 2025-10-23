@@ -1,0 +1,72 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Device type enum
+enum DeviceKind {
+  heat
+  fan
+  btsp
+  light_red    @map("light-red")
+  light_green  @map("light-green")
+  light_blue   @map("light-blue")
+  light_white  @map("light-white")
+  display
+
+  @@map("device_kind")
+}
+
+// 1-1. Raw Bounding Box History (for debugging and re-aggregation)
+model BboxHistory {
+  id         BigInt   @id @default(autoincrement())
+  ts         DateTime @default(now()) @db.Timestamptz
+  bboxes     Json     // [[x,y,w,h], ...] format
+  frameCount Int?     @map("frame_count")
+  cameraId   String?  @map("camera_id")
+
+  @@index([ts])
+  @@map("bbox_history")
+}
+
+// 1. Hourly Heatmap (1-hour aggregated person detection heatmap)
+model HeatmapHour {
+  hourTs DateTime @db.Timestamptz @map("hour_ts")
+  gx     Int
+  gy     Int
+  hits   BigInt   @default(0)
+
+  @@id([hourTs, gx, gy])
+  @@index([hourTs])
+  @@map("heatmap_hour")
+}
+
+// 2. Device Usage Event Log
+model DeviceUsage {
+  id         BigInt     @id @default(autoincrement())
+  ts         DateTime   @default(now()) @db.Timestamptz
+  deviceType DeviceKind @map("device_type")
+  action     String?
+  value      Float?     @db.Real
+
+  @@index([deviceType, ts])
+  @@index([ts])
+  @@map("device_usage")
+}
+
+// 2-1. Device Usage Hourly Pre-aggregation (optional, for high-frequency logs)
+model DeviceUsageHour {
+  hourTs     DateTime   @db.Timestamptz @map("hour_ts")
+  deviceType DeviceKind @map("device_type")
+  events     BigInt     @default(0)
+
+  @@id([hourTs, deviceType])
+  @@map("device_usage_hour")
+}

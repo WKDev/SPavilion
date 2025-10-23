@@ -1,0 +1,136 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    build:
+      context: ./postgres
+      dockerfile: Dockerfile
+    container_name: s-pavilion-postgres
+    environment:
+      POSTGRES_DB: s_pavilion
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: changeme
+      TZ: Asia/Seoul
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d s_pavilion"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - s-pavilion-network
+    restart: unless-stopped
+
+  # NestJS Backend API
+  nest:
+    build:
+      context: ./nest
+      dockerfile: Dockerfile
+    container_name: s-pavilion-nest
+    environment:
+      DATABASE_URL: postgresql://admin:changeme@postgres:5432/s_pavilion
+      PLC_PORT: /dev/ttyUSB0
+      PLC_BAUD_RATE: 9600
+      NODE_ENV: production
+      TZ: Asia/Seoul
+    ports:
+      - "3000:3000"
+    devices:
+      - /dev/ttyUSB0:/dev/ttyUSB0  # PLC serial port
+    privileged: true  # Required for serial port access
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./s-pavilion-react/dist:/app/public  # Serve React build
+    networks:
+      - s-pavilion-network
+    restart: unless-stopped
+
+  # MediaMTX RTSP to WebRTC/HLS converter
+  mediamtx:
+    image: bluenviron/mediamtx:latest
+    container_name: s-pavilion-mediamtx
+    environment:
+      TZ: Asia/Seoul
+    ports:
+      - "8554:8554"  # RTSP
+      - "8889:8889"  # WebRTC
+      - "8888:8888"  # HLS
+      - "8189:8189/udp"  # WebRTC UDP
+    volumes:
+      - ./mediamtx/mediamtx.yml:/mediamtx.yml:ro
+    networks:
+      - s-pavilion-network
+    restart: unless-stopped
+
+  # YOLOv8 Detection Service
+  detection-service:
+    build:
+      context: ./detection-service
+      dockerfile: Dockerfile
+    container_name: s-pavilion-detection
+    environment:
+      API_URL: http://nest:3000
+      RTSP_URL: rtsp://mediamtx:8554/camera
+      CAMERA_INDEX: 0
+      CELL_SIZE: 32
+      TZ: Asia/Seoul
+    devices:
+      - /dev/video0:/dev/video0  # UVC camera
+    privileged: true  # Required for camera access
+    depends_on:
+      - nest
+      - mediamtx
+    networks:
+      - s-pavilion-network
+    restart: unless-stopped
+
+  # Nginx Reverse Proxy (Optional)
+  nginx:
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+    container_name: s-pavilion-nginx
+    ports:
+      - "80:80"
+    depends_on:
+      - nest
+      - mediamtx
+    networks:
+      - s-pavilion-network
+    restart: unless-stopped
+    profiles:
+      - with-nginx  # Only start with: docker-compose --profile with-nginx up
+
+  # React Development Server (Development Only)
+  react-dev:
+    build:
+      context: ./s-pavilion-react
+      dockerfile: Dockerfile
+      target: development
+    container_name: s-pavilion-react-dev
+    environment:
+      VITE_API_URL: http://localhost:3000
+      VITE_WEBRTC_URL: http://localhost:8889
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./s-pavilion-react:/app
+      - /app/node_modules
+    networks:
+      - s-pavilion-network
+    profiles:
+      - development  # Only start with: docker-compose --profile development up
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  s-pavilion-network:
+    driver: bridge
