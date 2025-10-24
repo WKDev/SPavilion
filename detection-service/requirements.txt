@@ -1,7 +1,4 @@
-opencv-python==4.10.0.84
-ultralytics==8.3.68
+opencv-python-headless
 requests==2.32.3
 numpy==1.26.4
-PyGObject==3.50.0
-torch>=2.0.0
-torchvision>=0.15.0
+# PyGObject는 시스템 패키지(python3-gi)로 설치됨 - Dockerfile 참조

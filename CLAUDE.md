@@ -27,7 +27,7 @@ PLC (USB-RS232) → NestJS Backend (Modbus + REST API) ← PostgreSQL
 ## Technology Stack
 
 - **Backend**: NestJS (Node.js ≥20), Prisma ORM, modbus-serial
-- **Frontend**: React 19, Vite, D3.js, vanilla WebRTC API
+- **Frontend**: Next.js 16, React 19, shadcn/ui + Radix UI, Tailwind CSS 4, D3.js, Zustand, vanilla WebRTC API
 - **Detection**: Python, YOLOv8n (ultralytics), OpenCV, GStreamer
 - **Infrastructure**: PostgreSQL, MediaMTX, Docker Compose, Nginx (optional)
 
@@ -39,7 +39,7 @@ PLC (USB-RS232) → NestJS Backend (Modbus + REST API) ← PostgreSQL
 # First time setup
 docker-compose up -d postgres mediamtx
 cd nest && npm install
-cd ../s-pavilion-react && npm install
+cd ../react && pnpm install              # Using pnpm for Next.js frontend
 cd ../detection-service && pip install -r requirements.txt
 
 # Run Prisma migrations (after schema is created)
@@ -49,7 +49,7 @@ npx prisma generate
 
 # Development mode (run each in separate terminal)
 cd nest && npm run start:dev              # NestJS on port 3000
-cd s-pavilion-react && npm run dev        # React on port 5173
+cd react && pnpm dev                      # Next.js on port 3000 (or 3001 if conflict)
 python detection-service/main.py          # Detection service
 ```
 
@@ -65,15 +65,15 @@ npm run test:watch            # Watch mode
 npm run test:cov              # With coverage
 npm run test:e2e              # End-to-end tests
 
-# React
-cd s-pavilion-react
-npm run build                 # Build for production (outputs to dist/)
-npm run lint                  # Run ESLint
-npm run preview               # Preview production build
+# Next.js Frontend
+cd react
+pnpm build                    # Build for production (outputs to .next/)
+pnpm start                    # Start production server
 
-# Build React and serve via NestJS (production mode)
-cd s-pavilion-react && npm run build
-cp -r dist/* ../nest/public/
+# Build Next.js and serve via NestJS (production mode - TBD)
+# Note: Next.js standalone output can be integrated with NestJS
+cd react && pnpm build
+# Copy .next/standalone output to nest/public/ (requires configuration)
 cd ../nest && npm run build && npm run start:prod
 ```
 
@@ -221,17 +221,74 @@ npx prisma studio
 - Use GStreamer pipeline to push RTSP: `rtsp://mediamtx:8554/camera`
 - POST bbox data to NestJS every N frames (e.g., every 30 frames = ~1 per second at 30fps)
 - Handle reconnection logic for both API and RTSP stream
-- Grid size for heatmap: CELL_SIZE=32 (configurable)
+- Grid size for heatmap: CELL_SIZE=16 (configurable, optimized for 1920×1080)
 
-### React Frontend Architecture
+### Next.js Frontend Architecture
 
-- WebRTC connection to `http://localhost:8889/<stream>/whep` (MediaMTX WHEP protocol)
-- Poll `/api/devices` every 1-2 seconds for device status
-- D3.js for heatmap: create SVG grid based on CELL_SIZE, color cells by hit count
-- D3.js for histogram: time-series bar chart of device usage
-- Device control buttons call `POST /api/device-control`
-- Handle WebRTC reconnection on network issues
-- Responsive layout: stacked on mobile, side-by-side on desktop
+**Project Structure**:
+- `app/` - Next.js App Router (pages, layouts, route groups)
+- `components/` - React components organized by feature (layout, dashboard, device, usage, providers)
+- `hooks/` - Custom React hooks (use-plc-polling, use-toast)
+- `lib/` - Utilities, state management, API client, WebRTC manager
+- `public/` - Static assets
+- `styles/` - Global CSS and Tailwind configuration
+
+**State Management (Zustand)**:
+- Single store tracking 8 devices (heat, fan, btsp, lights, display)
+- PLC state: 1000 coils (boolean) + 1000 registers (number)
+- Polling status flag
+- Actions: updateDevice, updateCoil, updateRegister, setPolling
+
+**PLC Polling System**:
+- PLCPollingService class with configurable interval (default 1000ms)
+- usePLCPolling hook wraps service with React lifecycle
+- PLCPollingProvider wraps dashboard layout for automatic polling
+- Fetches coils + registers in parallel, updates store via callbacks
+
+**WebRTC Integration**:
+- WebRTCManager class implements WHEP protocol (WebRTC-HTTP Egress Protocol)
+- Connects to MediaMTX endpoint: `http://localhost:8889/<stream>/whep`
+- Handles offer/answer SDP exchange, ICE candidates, stream attachment
+- StreamViewer component with 3 modes: video-only, heatmap-only, overlay
+- Automatic reconnection on network issues
+
+**D3.js Visualizations**:
+- HeatmapOverlay: SVG grid with YlOrRd sequential color scale, overlay toggle
+- Histogram: Multi-device time-series bar chart with hour bucketing
+- HeatmapChart: 2D spatial grid with gradient legend sidebar
+- Color scales, axes, legends, responsive sizing
+
+**API Layer** (`lib/api.ts`):
+- Mock API with simulated delays (production will use NEXT_PUBLIC_API_URL)
+- Endpoints: getDevices, controlDevice, getHeatmap, getUsageHistory, getPLCCoils/Registers, set operations
+- Future integration: connect to NestJS backend at /api/*
+
+**UI Framework**:
+- shadcn/ui components (60+ pre-built, customizable)
+- Radix UI primitives (accessible, unstyled)
+- Tailwind CSS 4 with CSS variables for theming
+- Lucide React icons
+- IBM Plex Sans + JetBrains Mono fonts
+- Full dark mode support (oklch color space)
+
+**Key Components**:
+- TMButton: Timer/Manual button with circular progress indicator
+- DevMan: Device management panel with 7 control buttons
+- PLCDebug: Advanced coil/register browser (1000 items each, grid view)
+- TimeRangeSelector: Date range picker with 6 presets + custom calendar
+- HeatmapOverlay: D3-based spatial detection visualization
+
+**Pages**:
+- Dashboard: 3-panel grid (StreamViewer + UsageHist + DevMan)
+- Device Management: Tabs for Basic controls + Advanced PLC debug
+- Usage Analytics: Histogram + Heatmap tabs with time range selector
+- Settings: Placeholder (empty)
+
+**Responsive Design**:
+- Grid-based layouts (`grid-cols-10`, responsive breakpoints)
+- Mobile: stacked panels
+- Desktop: side-by-side multi-column layout
+- Adaptive component sizing
 
 ### Environment Variables
 
@@ -243,10 +300,10 @@ PLC_BAUD_RATE=9600
 NODE_ENV=production
 ```
 
-**React** (`s-pavilion-react/.env`):
+**Next.js Frontend** (`react/.env.local`):
 ```
-VITE_API_URL=http://localhost:3000
-VITE_WEBRTC_URL=http://localhost:8889
+NEXT_PUBLIC_API_URL=http://localhost:3000/api
+NEXT_PUBLIC_WEBRTC_URL=http://localhost:8889
 ```
 
 **Detection Service** (`detection-service/.env`):
@@ -254,14 +311,21 @@ VITE_WEBRTC_URL=http://localhost:8889
 API_URL=http://nest:3000
 RTSP_URL=rtsp://mediamtx:8554/camera
 CAMERA_INDEX=0
-CELL_SIZE=32
+CELL_SIZE=16
 ```
 
 ## Code Style Conventions
 
 - **TypeScript/NestJS**: Strict mode, use async/await, DTOs for validation, dependency injection
 - **Python**: Type hints, PEP 8, error handling for camera/network failures
-- **React**: Functional components with hooks, custom hooks for API/WebRTC, PropTypes or TS interfaces
+- **Next.js/React**:
+  - Functional components with hooks (`"use client"` for interactive components)
+  - TypeScript strict mode with path alias (`@/*` → root)
+  - Custom hooks pattern for shared logic (use-plc-polling, use-toast)
+  - Zustand for global state management
+  - Class utilities: `cn()` (clsx + tailwind-merge) for conditional classes
+  - shadcn/ui component patterns (variant composition with cva)
+  - Next.js App Router conventions (route groups, layouts, loading/error states)
 
 ## Troubleshooting
 
@@ -300,12 +364,32 @@ CELL_SIZE=32
 **Add new API endpoint**:
 1. Create controller method in NestJS
 2. Add service method for business logic
-3. Update React to consume new endpoint
+3. Add API function in `react/lib/api.ts`
+4. Create/update React component to consume endpoint
+5. Update Zustand store if state management needed
+
+**Add new shadcn/ui component**:
+```bash
+cd react
+npx shadcn@latest add <component-name>  # e.g., alert-dialog, badge, card
+```
+Components are added to `components/ui/` and can be customized
+
+**Add new page to Next.js frontend**:
+1. Create `app/(dashboard)/<page-name>/page.tsx`
+2. Add route to sidebar navigation in `components/layout/sidebar.tsx`
+3. Create page-specific components in `components/<feature>/`
+4. Update Zustand store if needed for state
+5. Add API calls in `lib/api.ts` if backend integration required
 
 ## References
 
 - NestJS: https://docs.nestjs.com/
 - Prisma: https://www.prisma.io/docs
+- Next.js: https://nextjs.org/docs
+- shadcn/ui: https://ui.shadcn.com/
+- Zustand: https://zustand-demo.pmnd.rs/
+- D3.js: https://d3js.org/
 - Ultralytics YOLOv8: https://docs.ultralytics.com/
 - MediaMTX: https://github.com/bluenviron/mediamtx
 - Modbus RTU: https://modbus.org/
