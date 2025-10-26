@@ -46,17 +46,28 @@ class CustomDeviceContext(ModbusDeviceContext):
         logger.info(f"Writing to coil address {address}: {values}")
 
         # Handle control coil writes (0x10-0x17)
-        if fc_as_hex == 1 and 16 <= address <= 23:  # FC 1 = Coils, 0x10-0x17
+        if fc_as_hex == 5 and 16 <= address <= 23:  # FC 5 = Write Single Coil, 0x10-0x17
             device_index = address - 16
             device_names = list(self.plc_server.device_controls.keys())
+
+            logger.info(f"Control coil write detected: address={address}, device_index={device_index}, device_names={device_names}")
 
             if device_index < len(device_names):
                 device_name = device_names[device_index]
                 control_name = device_name
                 status_name = device_name.replace('_set', '_status')
 
+                logger.info(f"Processing device control: device_name={device_name}, control_name={control_name}, status_name={status_name}")
+
                 if values[0]:  # If control is set to True
+                    logger.info(f"Triggering device control for {status_name}")
                     self.plc_server.handle_device_control(status_name, control_name)
+                else:
+                    logger.info(f"Control value is False, not triggering device control")
+            else:
+                logger.warning(f"Device index {device_index} out of range for device names {device_names}")
+        else:
+            logger.info(f"Not a control coil write: fc_as_hex={fc_as_hex}, address={address}")
 
         # Call parent setValues
         return super().setValues(fc_as_hex, address, values)
@@ -219,7 +230,7 @@ class MockPLCServer:
         identity.ModelName = 'XBC-DN20E'
         identity.MajorMinorRevision = '1.0'
 
-        logger.info(f"Starting Mock PLC Server (RTU over TCP/IP) on {host}:{port}")
+        logger.info(f"Starting Mock PLC Server (Modbus TCP) on {host}:{port}")
         logger.info("Device mapping:")
         logger.info("Coils 0x00-0x07: Device status (heat, fan, btsp, light_red, light_green, light_blue, light_white, display)")
         logger.info("Coils 0x10-0x17: Device control (heat_set, fan_set, btsp_set, light_red_set, light_green_set, light_blue_set, light_white_set, display_set)")
@@ -229,7 +240,7 @@ class MockPLCServer:
                 context=self.context,
                 identity=identity,
                 address=(host, port),
-                framer=FramerType.RTU
+                framer=FramerType.SOCKET  # 일반 TCP 사용
             )
         except Exception as e:
             logger.error(f"Error starting server: {e}")

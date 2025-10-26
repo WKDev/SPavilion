@@ -1,0 +1,182 @@
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: uhBscN4gshrqiwJc
+      POSTGRES_DB: s_pavilion
+      TZ: Asia/Seoul
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d s_pavilion"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    profiles:
+      - mock
+      - hardware
+    networks:
+      - s-pavilion-network
+    restart: unless-stopped
+
+  nest:
+    image: node:22-alpine
+    working_dir: /app
+    environment:
+      DATABASE_URL: postgresql://admin:uhBscN4gshrqiwJc@postgres:5432/s_pavilion
+      PLC_PORT: /dev/ttyUSB0
+      PLC_BAUD_RATE: 9600
+      NODE_ENV: development
+      TZ: Asia/Seoul
+      # Mock environment variables
+      MOCK_MODE: ${MOCK_MODE:-true}
+      MOCK_MODBUS_HOST: mock-modbus
+      MOCK_MODBUS_PORT: 502
+      # Platform detection
+      PLATFORM: windows
+    ports:
+      - "3000:3000"
+    # Windows doesn't need device mapping for serial ports in Docker Desktop
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mock-modbus:
+        condition: service_started
+    profiles:
+      - default
+      - hardware
+      - mock
+    volumes:
+      - ./nest:/app
+      - /app/node_modules
+      - ./next/dist:/app/public
+    networks:
+      - s-pavilion-network
+    restart: unless-stopped
+    command: sh -c "npm install && npm run start:dev"
+
+  # MediaMTX RTSP to WebRTC/HLS converter
+  mediamtx:
+    image: bluenviron/mediamtx:latest
+    container_name: mediamtx
+    environment:
+      TZ: Asia/Seoul
+    ports:
+      - "9554:8554"  # RTSP
+      - "8889:8889"  # WebRTC
+      - "8888:8888"  # HLS
+      - "8189:8189/udp"  # WebRTC UDP
+    profiles:
+      - default
+      - mock
+    volumes:
+      - ./mediamtx/mediamtx.yml:/mediamtx.yml:ro
+    networks:
+      - s-pavilion-network
+    restart: unless-stopped
+
+  # YOLOv8 Detection Service - Windows Optimized
+  detection-service:
+    build:
+      context: ./detection-service
+      dockerfile: Dockerfile
+    container_name: detection-service
+    working_dir: /app
+    environment:
+      API_URL: http://nest:3000
+      RTSP_URL: rtsp://mediamtx:8554/camera
+      CAMERA_INDEX: ${CAMERA_INDEX:-0}  # Windows webcam index
+      CELL_SIZE: 16
+      TZ: Asia/Seoul
+      # Mock environment variables
+      MOCK_MODE: ${MOCK_MODE:-false}  # Default to false for Windows webcam access
+      USE_GSTREAMER: ${USE_GSTREAMER:-false}
+      USE_DETECTION: ${USE_DETECTION:-true}
+      MOCK_VIDEO_FILE: /app/test-video.mp4
+      # Platform detection
+      PLATFORM: windows
+      # GPU settings (for NVIDIA GPU)
+      NVIDIA_VISIBLE_DEVICES: ${NVIDIA_VISIBLE_DEVICES:-all}
+      NVIDIA_DRIVER_CAPABILITIES: ${NVIDIA_DRIVER_CAPABILITIES:-compute,utility}
+    # Windows doesn't use /dev/video* devices - OpenCV accesses webcam directly
+    depends_on:
+      - mediamtx
+    profiles:
+      - default
+      - mock
+      - hardware
+    volumes:
+      - ./detection-service:/app
+      - /app/__pycache__
+    networks:
+      - s-pavilion-network
+    restart: unless-stopped
+    command: python -u main.py
+    # GPU runtime for NVIDIA GPUs
+    runtime: nvidia
+    logging:
+      driver: none
+
+  # Nginx Reverse Proxy (Optional)
+  nginx:
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+    container_name: s-pavilion-nginx
+    ports:
+      - "80:80"
+    depends_on:
+      - nest
+      - mediamtx
+    networks:
+      - s-pavilion-network
+    restart: unless-stopped
+    profiles:
+      - with-nginx
+
+  # next Development Server (Development Only)
+  next-dev:
+    image: node:22-alpine
+    container_name: next-dev
+    working_dir: /app
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./next:/app
+      - /app/node_modules
+    networks:
+      - s-pavilion-network
+    profiles:
+      - development
+      - mock
+    restart: unless-stopped
+    command: sh -c "yarn install && yarn dev -p 3001 -H 0.0.0.0"
+
+  # Mock Modbus Server (Mock Environment Only)
+  mock-modbus:
+    build:
+      context: ./mock-modbus
+      dockerfile: Dockerfile
+    container_name: mock-modbus
+    ports:
+      - "502:502"  # Modbus TCP port
+    environment:
+      TZ: Asia/Seoul
+    networks:
+      - s-pavilion-network
+    profiles:
+      - mock
+    restart: unless-stopped
+    command: python main.py
+
+volumes:
+  postgres:
+    driver: local
+
+networks:
+  s-pavilion-network:
+    driver: bridge

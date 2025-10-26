@@ -1,0 +1,69 @@
+# 멀티 아키텍처 지원 Dockerfile (ARM64, AMD64, CPU/GPU 호환)
+ARG ARCH=amd64
+ARG CUDA_VERSION=12.1
+
+# 베이스 이미지 선택 (아키텍처별)
+FROM --platform=$ARCH ubuntu:24.04 as base
+
+# CUDA 지원이 필요한 경우에만 NVIDIA 이미지 사용
+FROM --platform=$ARCH nvidia/cuda:${CUDA_VERSION}-cudnn-runtime-ubuntu24.04 as cuda-base
+
+# 최종 베이스 이미지 선택 (빌드 시 --target 지정)
+FROM base as cpu-only
+FROM cuda-base as gpu-enabled
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# OS deps + GStreamer full runtime + RTSP 서버 + VAAPI
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3-pip \
+    ca-certificates curl \
+    # X/OpenGL 런타임
+    libgl1 libglib2.0-0 libsm6 libxext6 libxrender1 libgomp1 \
+    # VAAPI 가속(호스트 /dev/dri 필요)
+    libdrm2 va-driver-all gstreamer1.0-vaapi \
+    # GStreamer 코어
+    libgstreamer1.0-0 libgstreamer-plugins-base1.0-0 gstreamer1.0-tools \
+    gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
+    gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly \
+    gstreamer1.0-libav gstreamer1.0-gl \
+    # PyGObject(GStreamer 바인딩)
+    python3-gi gobject-introspection gir1.2-gstreamer-1.0 \
+    # RTSP 서버 라이브러리
+    libgstrtspserver-1.0-0 gir1.2-gst-rtsp-server-1.0 \
+    # 유틸(선택) : 코덱·디버깅 보조
+    ffmpeg \
+ && rm -rf /var/lib/apt/lists/*
+
+# GPU 환경에서만 NVIDIA 패키지 설치
+RUN --mount=type=bind,from=gpu-enabled,source=/dev/null,target=/dev/null \
+    if [ -f /usr/bin/nvidia-smi ]; then \
+        apt-get update && apt-get install -y --no-install-recommends \
+        nvidia-cuda-toolkit && \
+        rm -rf /var/lib/apt/lists/*; \
+    fi
+
+WORKDIR /app
+
+RUN echo "Python version: $(python3 --version)" && echo "Pip version: $(pip3 --version)"
+
+# Python deps
+COPY requirements.txt .
+RUN python3 -m pip install --system --no-cache-dir -r requirements.txt
+
+# GPU 환경에서만 CUDA 확인
+RUN --mount=type=bind,from=gpu-enabled,source=/dev/null,target=/dev/null \
+    if [ -f /usr/bin/nvidia-smi ]; then \
+        nvidia-smi && \
+        python3 -c "import torch; print('CUDA available:', torch.cuda.is_available()); print('PyTorch version:', torch.__version__)"; \
+    else \
+        python3 -c "import torch; print('CUDA available:', torch.cuda.is_available()); print('PyTorch version:', torch.__version__)"; \
+    fi
+
+# GStreamer 동작 자가 테스트
+RUN gst-inspect-1.0 | head -n 20 && \
+    gst-launch-1.0 -q fakesrc num-buffers=5 ! fakesink
+
+ENV PYTHONUNBUFFERED=1
+
+CMD ["python3", "main.py"]

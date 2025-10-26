@@ -8,7 +8,10 @@ import os
 import requests
 import subprocess
 from datetime import datetime
-# from ultralytics import YOLO
+# Conditional imports for detection
+if os.getenv('USE_DETECTION', 'false').lower() == 'true':
+    from ultralytics import YOLO
+    import torch
 
 # GStreamer imports (PyGObject)
 try:
@@ -29,7 +32,7 @@ RTSP_URL = os.getenv('RTSP_URL', 'rtsp://localhost:8554/camera')
 CAMERA_INDEX = int(os.getenv('CAMERA_INDEX', '0'))
 CELL_SIZE = int(os.getenv('CELL_SIZE', '32'))
 POST_INTERVAL = int(os.getenv('POST_INTERVAL', '30'))
-USE_GSTREAMER = os.getenv('USE_GSTREAMER', 'true')
+USE_GSTREAMER = os.getenv('USE_GSTREAMER', 'false')
 USE_DETECTION = os.getenv('USE_DETECTION', 'false')
 
 # Global variables
@@ -162,6 +165,46 @@ class GStreamerWriter:
             print("GStreamer pipeline cleaned up")
 
 
+def check_gpu_availability():
+    """Check GPU and CUDA availability when detection is enabled"""
+    if USE_DETECTION == 'true':
+        print("\n" + "=" * 60)
+        print("GPU AND CUDA AVAILABILITY CHECK")
+        print("=" * 60)
+        
+        try:
+            # Check if PyTorch is available
+            print(f"PyTorch version: {torch.__version__}")
+            
+            # Check CUDA availability
+            cuda_available = torch.cuda.is_available()
+            print(f"CUDA available: {cuda_available}")
+            
+            if cuda_available:
+                print(f"CUDA version: {torch.version.cuda}")
+                print(f"Number of GPUs: {torch.cuda.device_count()}")
+                
+                for i in range(torch.cuda.device_count()):
+                    gpu_name = torch.cuda.get_device_name(i)
+                    gpu_memory = torch.cuda.get_device_properties(i).total_memory / (1024**3)  # GB
+                    print(f"  GPU {i}: {gpu_name} ({gpu_memory:.1f} GB)")
+                
+                # Set device
+                device = torch.device('cuda' if cuda_available else 'cpu')
+                print(f"Using device: {device}")
+            else:
+                print("CUDA not available - will use CPU for inference")
+                print("Make sure NVIDIA drivers and CUDA toolkit are installed")
+                
+        except Exception as e:
+            print(f"Error checking GPU availability: {e}")
+            print("PyTorch or CUDA may not be properly installed")
+        
+        print("=" * 60)
+    else:
+        print("\nGPU detection skipped (USE_DETECTION=false)")
+
+
 def print_environment_variables():
     """Print all environment variables at startup"""
     print("=" * 60)
@@ -176,6 +219,7 @@ def print_environment_variables():
     print(f"CELL_SIZE: {CELL_SIZE}")
     print(f"POST_INTERVAL: {POST_INTERVAL}")
     print(f"USE_GSTREAMER: {USE_GSTREAMER}")
+    print(f"USE_DETECTION: {USE_DETECTION}")
     print("=" * 60)
 
 
@@ -261,19 +305,32 @@ def check_dependencies():
 
 
 def load_yolo_model():
+    """Load YOLOv8n model for person detection"""
     if USE_DETECTION == 'true':
-        """Load YOLOv8n model for person detection"""
         global model
         print("Loading YOLOv8n model...")
         try:
+            # Load model
             model = YOLO('yolov8n.pt')
-            print("YOLOv8n model loaded successfully")
+            
+            # Check if CUDA is available and set device
+            if torch.cuda.is_available():
+                device = 'cuda'
+                print(f"YOLOv8n model loaded successfully on GPU")
+            else:
+                device = 'cpu'
+                print(f"YOLOv8n model loaded successfully on CPU")
+            
+            # Move model to device
+            model.to(device)
+            print(f"Model device: {device}")
+            
             return True
         except Exception as e:
             print(f"Error loading YOLOv8n model: {e}")
             return False
     else:
-        print("YOLOv8n model not used")
+        print("YOLOv8n model not used (USE_DETECTION=false)")
         return True
 
 
@@ -373,26 +430,30 @@ def init_ffmpeg_writer():
     ffmpeg_cmd = [
         'ffmpeg',
         '-y',  # overwrite output files
+        '-loglevel', 'warning',  # Show warnings and errors
         '-f', 'rawvideo',
         '-vcodec', 'rawvideo',
         '-pix_fmt', 'bgr24',
         '-s', f'{camera_width}x{camera_height}',
         '-r', f'{video_fps:.2f}',  # Use actual video FPS
+        '-fflags', '+genpts',  # Generate presentation timestamps
         '-i', '-',  # read from stdin
         # Video encoding settings
         '-c:v', 'libx264',
-        '-preset', 'fast',  # Changed from ultrafast to fast for better stability
+        '-preset', 'ultrafast',  # Use ultrafast for lower latency
         '-tune', 'zerolatency',
         '-profile:v', 'baseline',
-        '-g', '30',  # Reduced GOP size for faster recovery
-        '-b:v', '1000k',  # Reduced bitrate for stability
-        '-maxrate', '1500k',
-        '-bufsize', '2000k',
+        '-g', '60',  # Keyframe interval
+        '-b:v', '2000k',  # Bitrate
+        '-maxrate', '2000k',
+        '-bufsize', '4000k',
+        '-pix_fmt', 'yuv420p',
         # Disable audio
         '-an',
         # RTSP output settings
         '-f', 'rtsp',
         '-rtsp_transport', 'tcp',  # Use TCP for more reliable connection
+        '-timeout', '5000000',  # 5 second timeout in microseconds
         RTSP_URL
     ]
 
@@ -400,8 +461,8 @@ def init_ffmpeg_writer():
         ffmpeg_process = subprocess.Popen(
             ffmpeg_cmd,
             stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE  # Capture stderr separately
         )
         print(f"FFmpeg RTSP pipeline initialized: {RTSP_URL}")
         print(f"  Resolution: {camera_width}x{camera_height}@{video_fps:.2f}fps")
@@ -411,10 +472,11 @@ def init_ffmpeg_writer():
         # Give FFmpeg a moment to start and check if it's still running
         time.sleep(1.0)  # Increased wait time for better stability
         if ffmpeg_process.poll() is not None:
-            stdout, stderr = ffmpeg_process.communicate()
+            _, stderr = ffmpeg_process.communicate()
             print(f"FFmpeg process failed to start. Exit code: {ffmpeg_process.returncode}")
-            print(f"FFmpeg stdout: {stdout.decode() if stdout else 'None'}")
-            print(f"FFmpeg stderr: {stderr.decode() if stderr else 'None'}")
+            if stderr:
+                print(f"FFmpeg error output:")
+                print(stderr.decode())
             return None
             
         return ffmpeg_process
@@ -428,7 +490,7 @@ def send_bbox_to_api(bboxes):
     try:
         payload = {
             'bboxes': bboxes,
-            'frame_count': frame_count,
+            'frame_count': int(frame_count),
             'camera_id': f'camera_{CAMERA_INDEX}'
         }
 
@@ -507,6 +569,9 @@ def main():
     print("Starting S-Pavilion Detection Service")
     print_environment_variables()
 
+    # Check GPU availability (if detection is enabled)
+    check_gpu_availability()
+
     # Check dependencies (GStreamer, FFmpeg)
     check_dependencies()
 
@@ -567,17 +632,18 @@ def main():
 
             frame_count += 1
 
-            # # Perform person detection
-            # detections = perform_detection(frame)
+            # Perform person detection (if enabled)
+            if USE_DETECTION == 'true':
+                detections = perform_detection(frame)
 
-            # # Draw bounding boxes on frame
-            # if detections:
-            #     frame = draw_bboxes(frame, detections)
+                # Draw bounding boxes on frame
+                if detections:
+                    frame = draw_bboxes(frame, detections)
 
-            # # Send bbox data to API every POST_INTERVAL frames
-            # if frame_count % POST_INTERVAL == 0 and detections:
-            #     bbox_list = [det['bbox'] for det in detections]
-            #     send_bbox_to_api(bbox_list)
+                # Send bbox data to API every POST_INTERVAL frames
+                if frame_count % POST_INTERVAL == 0 and detections:
+                    bbox_list = [det['bbox'] for det in detections]
+                    send_bbox_to_api(bbox_list)
 
             # Write frame to RTSP stream
             if writer is not None:
@@ -597,18 +663,31 @@ def main():
 
                 except BrokenPipeError:
                     print(f"Error: RTSP stream pipe broken. Writer process may have terminated.")
-                    print("Attempting to reconnect writer...")
-                    # Clean up the broken writer
+                    # Clean up the broken writer and get error output
                     try:
                         if USE_GSTREAMER == 'true':
                             writer.cleanup()
                         else:
-                            writer.stdin.close()
+                            try:
+                                writer.stdin.close()
+                            except:
+                                pass
                             writer.terminate()
-                            writer.wait(timeout=2)
-                    except:
-                        pass
+                            try:
+                                _, stderr = writer.communicate(timeout=2)
+                                if stderr:
+                                    print(f"FFmpeg error output:")
+                                    print(stderr.decode())
+                            except subprocess.TimeoutExpired:
+                                writer.kill()
+                                _, stderr = writer.communicate()
+                                if stderr:
+                                    print(f"FFmpeg error output (killed):")
+                                    print(stderr.decode())
+                    except Exception as e:
+                        print(f"Error during writer cleanup: {e}")
                     writer = None
+                    print("Attempting to reconnect writer...")
 
                     # Wait before attempting to reconnect
                     time.sleep(2.0)  # Wait 2 seconds before reconnecting
@@ -649,6 +728,14 @@ def main():
                     # For FFmpeg subprocess, check poll status
                     if writer.poll() is not None:  # Process has terminated
                         print(f"Writer process terminated unexpectedly. Exit code: {writer.returncode}")
+                        # Try to get any remaining error output
+                        try:
+                            _, stderr = writer.communicate(timeout=0.1)
+                            if stderr:
+                                print(f"FFmpeg error output:")
+                                print(stderr.decode())
+                        except:
+                            pass
                         writer = None
                         print("Attempting to reconnect writer...")
 

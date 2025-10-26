@@ -13,7 +13,7 @@ COPY requirements.txt /app/
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application files
-COPY mock_plc_server.py /app/
+COPY main.py /app/
 COPY start_mock_plc.sh /app/
 
 # Make startup script executable

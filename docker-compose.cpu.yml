@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  detection-service:
+    build:
+      context: ./detection-service
+      dockerfile: Dockerfile.cpu
+      args:
+        - ARCH=amd64
+    ports:
+      - "8000:8000"
+    environment:
+      - CUDA_VISIBLE_DEVICES=""
+      - PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:128
+    volumes:
+      - ./detection-service:/app
+      - /dev/dri:/dev/dri  # VAAPI 가속용
+    restart: unless-stopped
+    networks:
+      - spavilion-network
+
+  # ARM64 환경용
+  detection-service-arm64:
+    build:
+      context: ./detection-service
+      dockerfile: Dockerfile.cpu
+      args:
+        - ARCH=arm64
+    ports:
+      - "8001:8000"
+    environment:
+      - CUDA_VISIBLE_DEVICES=""
+    volumes:
+      - ./detection-service:/app
+      - /dev/dri:/dev/dri
+    restart: unless-stopped
+    networks:
+      - spavilion-network
+    profiles:
+      - arm64
+
+networks:
+  spavilion-network:
+    external: true

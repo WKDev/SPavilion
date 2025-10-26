@@ -1,4 +1,9 @@
 opencv-python-headless
-requests==2.32.3
-numpy==1.26.4
+requests
+numpy
+# PyTorch with CUDA support
+torch
+torchvision
+# YOLOv8 for object detection
+ultralytics
 # PyGObject는 시스템 패키지(python3-gi)로 설치됨 - Dockerfile 참조
