@@ -1,6 +1,6 @@
 // WebRTC connection manager for MediaMTX streaming
 
-const WEBRTC_URL = process.env.NEXT_PUBLIC_WEBRTC_URL || "http://localhost:8888"
+const WEBRTC_URL = process.env.NEXT_PUBLIC_WEBRTC_URL || "http://localhost:8889"
 
 export class WebRTCManager {
   private peerConnection: RTCPeerConnection | null = null

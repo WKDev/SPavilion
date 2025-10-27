@@ -186,32 +186,21 @@ export async function getHeatmap(timeRange?: {
  * @returns 히스토그램 데이터 배열
  * @throws {ApiClientError} API 호출 실패 시
  *
- * @todo 백엔드에 별도 엔드포인트 추가 필요 (현재는 heatmap 데이터를 반환)
- * 실제로는 DeviceUsage 테이블을 조회해야 함
+ * DeviceUsage 테이블에서 ON 이벤트(rising edge)를 시간별로 집계하여 반환
  */
 export async function getUsageHistory(timeRange: {
   from: Date
   to: Date
 }): Promise<HistogramData[]> {
-  // TODO: 백엔드에 GET /api/devices/usage-history 엔드포인트 추가 필요
-  // 현재는 임시로 빈 배열 반환
-  console.warn(
-    "getUsageHistory: 백엔드 엔드포인트가 아직 구현되지 않았습니다."
+  const params = new URLSearchParams()
+  params.append("from", timeRange.from.toISOString())
+  params.append("to", timeRange.to.toISOString())
+
+  const response = await fetchApi<{ success: boolean; data: HistogramData[] }>(
+    `/devices/usage-history?${params.toString()}`
   )
 
-  // 임시 Mock 데이터 (개발용)
-  const mockData: HistogramData[] = Array.from({ length: 24 }, (_, i) => {
-    const timestamp = new Date(
-      timeRange.from.getTime() + i * 3600000
-    ).toISOString()
-    return [
-      { timestamp, value: Math.random() * 100, device: "heat" },
-      { timestamp, value: Math.random() * 80, device: "fan" },
-      { timestamp, value: Math.random() * 60, device: "btsp" },
-    ]
-  }).flat()
-
-  return mockData
+  return response.data
 }
 
 // ========================================

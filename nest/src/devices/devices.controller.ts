@@ -3,14 +3,17 @@ import {
   Get,
   Post,
   Body,
+  Query,
   HttpException,
   HttpStatus,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
 import { ModbusService } from '../modbus/modbus.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { DeviceUsageService } from '../device-usage/device-usage.service';
 import { DeviceControlDto } from '../dto/device-control.dto';
 import { CreateDeviceUsageDto } from '../dto/device-usage.dto';
+import { UsageHistoryQueryDto } from '../device-usage/dto/usage-history-query.dto';
 
 @ApiTags('devices')
 @Controller('api/devices')
@@ -18,6 +21,7 @@ export class DevicesController {
   constructor(
     private readonly modbusService: ModbusService,
     private readonly prisma: PrismaService,
+    private readonly deviceUsageService: DeviceUsageService,
   ) {}
 
   @Get()
@@ -92,8 +96,8 @@ export class DevicesController {
   @Post('usage')
   @ApiOperation({ summary: '디바이스 사용 로그 기록' })
   @ApiBody({ type: CreateDeviceUsageDto })
-  @ApiResponse({ 
-    status: 200, 
+  @ApiResponse({
+    status: 200,
     description: '디바이스 사용 로그 기록 성공',
     schema: {
       example: {
@@ -120,6 +124,52 @@ export class DevicesController {
     } catch (error) {
       throw new HttpException(
         `Failed to log device usage: ${error.message}`,
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Get('usage-history')
+  @ApiOperation({ summary: '디바이스 사용 히스토리 조회 (히스토그램용)' })
+  @ApiResponse({
+    status: 200,
+    description: '디바이스 사용 히스토리 조회 성공',
+    schema: {
+      example: {
+        success: true,
+        data: [
+          {
+            timestamp: '2025-10-28T10:00:00.000Z',
+            value: 5,
+            device: 'heat',
+          },
+          {
+            timestamp: '2025-10-28T10:00:00.000Z',
+            value: 3,
+            device: 'fan',
+          },
+        ],
+      },
+    },
+  })
+  @ApiResponse({ status: 500, description: '디바이스 사용 히스토리 조회 실패' })
+  async getUsageHistory(@Query() query: UsageHistoryQueryDto) {
+    try {
+      // Default to last 24 hours if not specified
+      const to = query.to ? new Date(query.to) : new Date();
+      const from = query.from
+        ? new Date(query.from)
+        : new Date(to.getTime() - 24 * 60 * 60 * 1000);
+
+      const data = await this.deviceUsageService.getHistoryInRange(from, to);
+
+      return {
+        success: true,
+        data,
+      };
+    } catch (error) {
+      throw new HttpException(
+        `Failed to get usage history: ${error.message}`,
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }

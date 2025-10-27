@@ -11,7 +11,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - ./postgres:/var/lib/postgresql/data
+      - ./postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U admin -d s_pavilion"]
       interval: 10s
@@ -136,7 +136,7 @@ services:
     restart: unless-stopped
     command: python -u main.py  # Use hot reload for development
     # GPU runtime for NVIDIA GPUs
-    runtime: nvidia
+    # runtime: nvidia
     # stop logs
     logging:
       driver: none
@@ -168,6 +168,9 @@ services:
     volumes:
       - ./next:/app  # Mount next folder for live development
       - /app/node_modules  # Anonymous volume for node_modules
+
+    environment:
+      - WEBRTC_URL=http://localhost:8889
     networks:
       - s-pavilion-network
     profiles:
