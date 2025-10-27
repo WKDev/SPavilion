@@ -41,6 +41,13 @@ class CustomDeviceContext(ModbusDeviceContext):
         super().__init__(*args, **kwargs)
         self.plc_server = plc_server
 
+    def getValues(self, fc_as_hex, address, count=1):
+        """Override getValues to add logging for coil reads"""
+        logger.info(f"Reading coil address {address}, count={count}, fc={fc_as_hex}")
+        result = super().getValues(fc_as_hex, address, count)
+        logger.info(f"Read result for address {address}: {result}")
+        return result
+
     def setValues(self, fc_as_hex, address, values):
         """Override setValues to handle device control logic"""
         logger.info(f"Writing to coil address {address}: {values}")
@@ -69,8 +76,10 @@ class CustomDeviceContext(ModbusDeviceContext):
         else:
             logger.info(f"Not a control coil write: fc_as_hex={fc_as_hex}, address={address}")
 
-        # Call parent setValues
-        return super().setValues(fc_as_hex, address, values)
+        # Call parent setValues and return the result
+        result = super().setValues(fc_as_hex, address, values)
+        logger.info(f"Successfully wrote coil address {address}: {values}")
+        return result
 
 class MockPLCServer:
     def __init__(self):
@@ -125,7 +134,7 @@ class MockPLCServer:
         """Setup Modbus data store with initial values"""
         # Create data blocks
         # Coils: 0x00-0x07 (status), 0x10-0x17 (control)
-        coils_data = [0] * 100  # Using integers (0/1) instead of booleans
+        coils_data = [0] * 2000  # Using integers (0/1) instead of booleans - increased to support wider range
 
         # Set initial status values
         status_keys = list(self.device_states.keys())
@@ -140,15 +149,15 @@ class MockPLCServer:
         # Create custom device context with device control logic
         self.store = CustomDeviceContext(
             self,  # Pass PLC server instance
-            di=ModbusSequentialDataBlock(0, [0] * 100),  # Discrete Inputs
+            di=ModbusSequentialDataBlock(0, [0] * 2000),  # Discrete Inputs - increased to match coils
             co=ModbusSequentialDataBlock(0, coils_data),     # Coils
-            hr=ModbusSequentialDataBlock(0, [0] * 100),      # Holding Registers
-            ir=ModbusSequentialDataBlock(0, [0] * 100)       # Input Registers
+            hr=ModbusSequentialDataBlock(0, [0] * 2000),      # Holding Registers - increased to match coils
+            ir=ModbusSequentialDataBlock(0, [0] * 2000)       # Input Registers - increased to match coils
         )
 
         # Create server context
         self.context = ModbusServerContext(devices=self.store, single=True)
-        self.slave_id = 0x00  # single=True recommended ID
+        self.slave_id = 0x00  # Slave ID for device context
     
     
     def handle_device_control(self, status_name, control_name):
@@ -234,6 +243,7 @@ class MockPLCServer:
         logger.info("Device mapping:")
         logger.info("Coils 0x00-0x07: Device status (heat, fan, btsp, light_red, light_green, light_blue, light_white, display)")
         logger.info("Coils 0x10-0x17: Device control (heat_set, fan_set, btsp_set, light_red_set, light_green_set, light_blue_set, light_white_set, display_set)")
+        logger.info("Server is ready to accept connections...")
 
         try:
             await StartAsyncTcpServer(
@@ -252,3 +262,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+

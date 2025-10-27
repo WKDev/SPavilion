@@ -22,6 +22,8 @@ export class ModbusService implements OnModuleInit, OnModuleDestroy {
   private pollingInterval: NodeJS.Timeout;
   private previousState: DeviceState;
   private isConnected = false;
+  private isReading = false; // Flag to prevent concurrent reads
+  private requestQueue: Array<() => Promise<any>> = []; // Request queue for serialization
 
   // Modbus address mapping
   private readonly STATUS_START_ADDR = 0x00; // Read addresses 0x00-0x07
@@ -72,10 +74,19 @@ export class ModbusService implements OnModuleInit, OnModuleDestroy {
       try {
         await this.client.connectTCP(host, { port });
         this.client.setID(0); // Mock 서버는 단일 디바이스
-        this.client.setTimeout(1000);
-        this.isConnected = true;
-        
-        this.logger.log(`Connected to Mock PLC at ${host}:${port}`);
+        this.client.setTimeout(10000); // 타임아웃을 10초로 증가
+
+        // Wait for connection to stabilize
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
+        // Test connection
+        const connectionTest = await this.testConnection();
+        if (connectionTest) {
+          this.isConnected = true;
+          this.logger.log(`Connected to Mock PLC at ${host}:${port}`);
+        } else {
+          throw new Error('Connection test failed');
+        }
       } catch (error) {
         this.logger.error(`Failed to connect to Mock PLC: ${error.message}`);
         this.isConnected = false;
@@ -97,12 +108,21 @@ export class ModbusService implements OnModuleInit, OnModuleDestroy {
         });
 
         this.client.setID(slaveId);
-        this.client.setTimeout(1000);
-        this.isConnected = true;
+        this.client.setTimeout(10000); // 타임아웃을 10초로 증가
 
-        this.logger.log(
-          `Connected to PLC at ${port} (${baudRate} baud, slave ID: ${slaveId})`,
-        );
+        // Wait for connection to stabilize
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
+        // Test connection
+        const connectionTest = await this.testConnection();
+        if (connectionTest) {
+          this.isConnected = true;
+          this.logger.log(
+            `Connected to PLC at ${port} (${baudRate} baud, slave ID: ${slaveId})`,
+          );
+        } else {
+          throw new Error('Connection test failed');
+        }
       } catch (error) {
         this.logger.error(`Failed to connect to PLC: ${error.message}`);
         this.isConnected = false;
@@ -113,11 +133,11 @@ export class ModbusService implements OnModuleInit, OnModuleDestroy {
   }
 
   private startPolling() {
-    // Poll every 100ms (0.1 seconds) as specified
+    // Poll every 500ms (0.5 seconds) - increased for network stability
     this.pollingInterval = setInterval(() => {
       this.pollDeviceStatus();
-    }, 100);
-    this.logger.log('Started PLC polling (100ms interval)');
+    }, 500);
+    this.logger.log('Started PLC polling (500ms interval)');
   }
 
   private stopPolling() {
@@ -128,10 +148,11 @@ export class ModbusService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async pollDeviceStatus() {
-    if (!this.isConnected) {
-      return;
+    if (!this.isConnected || this.isReading) {
+      return; // Skip if already reading
     }
 
+    this.isReading = true;
     try {
       // Read coils 0x00-0x07 (device status)
       const result = await this.client.readCoils(
@@ -148,8 +169,13 @@ export class ModbusService implements OnModuleInit, OnModuleDestroy {
     } catch (error) {
       this.logger.error(`Polling error: ${error.message}`);
       this.isConnected = false;
-      // Attempt to reconnect
-      await this.connect();
+      // Attempt to reconnect after a short delay
+      setTimeout(() => {
+        this.logger.log('Attempting to reconnect to PLC...');
+        this.connect();
+      }, 2000);
+    } finally {
+      this.isReading = false;
     }
   }
 
@@ -210,6 +236,23 @@ export class ModbusService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
+   * Execute a Modbus request with proper queueing to prevent concurrent access
+   */
+  private async executeWithQueue<T>(operation: () => Promise<T>): Promise<T> {
+    // Wait until no other operation is in progress
+    while (this.isReading) {
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+
+    this.isReading = true;
+    try {
+      return await operation();
+    } finally {
+      this.isReading = false;
+    }
+  }
+
+  /**
    * Get current device status
    */
   async getDeviceStatus(): Promise<DeviceState> {
@@ -217,16 +260,18 @@ export class ModbusService implements OnModuleInit, OnModuleDestroy {
       throw new Error('PLC is not connected');
     }
 
-    try {
-      const result = await this.client.readCoils(
-        this.STATUS_START_ADDR,
-        this.DEVICE_COUNT,
-      );
-      return this.createStateFromCoils(result.data);
-    } catch (error) {
-      this.logger.error(`Failed to read device status: ${error.message}`);
-      throw error;
-    }
+    return this.executeWithQueue(async () => {
+      try {
+        const result = await this.client.readCoils(
+          this.STATUS_START_ADDR,
+          this.DEVICE_COUNT,
+        );
+        return this.createStateFromCoils(result.data);
+      } catch (error) {
+        this.logger.error(`Failed to read device status: ${error.message}`);
+        throw error;
+      }
+    });
   }
 
   /**
@@ -250,7 +295,10 @@ export class ModbusService implements OnModuleInit, OnModuleDestroy {
       const currentValue = currentState[deviceKind];
 
       // Toggle: write opposite value
-      await this.client.writeCoil(controlAddress, !currentValue);
+      const newValue = !currentValue;
+      console.log(`[ModbusService] Toggle device command - Device: ${deviceKind}, Address: ${controlAddress}, Current: ${currentValue}, New: ${newValue}`);
+      
+      await this.client.writeCoil(controlAddress, newValue);
 
       this.logger.log(
         `Toggled device ${deviceKind} at address 0x${controlAddress.toString(16)}`,
@@ -277,6 +325,7 @@ export class ModbusService implements OnModuleInit, OnModuleDestroy {
     const controlAddress = this.CONTROL_START_ADDR + deviceIndex;
 
     try {
+      console.log(`[ModbusService] Set device command - Device: ${deviceKind}, Address: ${controlAddress}, Value: ${value}`);
       await this.client.writeCoil(controlAddress, value);
 
       this.logger.log(
@@ -296,6 +345,19 @@ export class ModbusService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
+   * Test connection by reading a single coil
+   */
+  private async testConnection(): Promise<boolean> {
+    try {
+      await this.client.readCoils(0, 1);
+      return true;
+    } catch (error) {
+      this.logger.warn(`Connection test failed: ${error.message}`);
+      return false;
+    }
+  }
+
+  /**
    * Read multiple coils
    */
   async readCoils(startAddress: number, count: number): Promise<boolean[]> {
@@ -303,13 +365,15 @@ export class ModbusService implements OnModuleInit, OnModuleDestroy {
       throw new Error('PLC is not connected');
     }
 
-    try {
-      const result = await this.client.readCoils(startAddress, count);
-      return result.data;
-    } catch (error) {
-      this.logger.error(`Failed to read coils ${startAddress}-${startAddress + count - 1}: ${error.message}`);
-      throw error;
-    }
+    return this.executeWithQueue(async () => {
+      try {
+        const result = await this.client.readCoils(startAddress, count);
+        return result.data;
+      } catch (error) {
+        this.logger.error(`Failed to read coils ${startAddress}-${startAddress + count - 1}: ${error.message}`);
+        throw error;
+      }
+    });
   }
 
   /**
@@ -320,13 +384,18 @@ export class ModbusService implements OnModuleInit, OnModuleDestroy {
       throw new Error('PLC is not connected');
     }
 
-    try {
-      await this.client.writeCoil(address, value);
-      this.logger.debug(`Wrote coil ${address} = ${value}`);
-    } catch (error) {
-      this.logger.error(`Failed to write coil ${address}: ${error.message}`);
-      throw error;
-    }
+    return this.executeWithQueue(async () => {
+      try {
+        console.log(`[ModbusService] Writing coil - Address: ${address}, Value: ${value}`);
+        await this.client.writeCoil(address, value);
+        this.logger.debug(`Wrote coil ${address} = ${value}`);
+        console.log(`[ModbusService] Successfully wrote coil - Address: ${address}, Value: ${value}`);
+      } catch (error) {
+        this.logger.error(`Failed to write coil ${address}: ${error.message}`);
+        console.log(`[ModbusService] Failed to write coil - Address: ${address}, Value: ${value}, Error: ${error.message}`);
+        throw error;
+      }
+    });
   }
 
   /**
@@ -337,13 +406,15 @@ export class ModbusService implements OnModuleInit, OnModuleDestroy {
       throw new Error('PLC is not connected');
     }
 
-    try {
-      const result = await this.client.readHoldingRegisters(startAddress, count);
-      return result.data;
-    } catch (error) {
-      this.logger.error(`Failed to read registers ${startAddress}-${startAddress + count - 1}: ${error.message}`);
-      throw error;
-    }
+    return this.executeWithQueue(async () => {
+      try {
+        const result = await this.client.readHoldingRegisters(startAddress, count);
+        return result.data;
+      } catch (error) {
+        this.logger.error(`Failed to read registers ${startAddress}-${startAddress + count - 1}: ${error.message}`);
+        throw error;
+      }
+    });
   }
 
   /**
@@ -354,12 +425,14 @@ export class ModbusService implements OnModuleInit, OnModuleDestroy {
       throw new Error('PLC is not connected');
     }
 
-    try {
-      await this.client.writeRegister(address, value);
-      this.logger.debug(`Wrote register ${address} = ${value}`);
-    } catch (error) {
-      this.logger.error(`Failed to write register ${address}: ${error.message}`);
-      throw error;
-    }
+    return this.executeWithQueue(async () => {
+      try {
+        await this.client.writeRegister(address, value);
+        this.logger.debug(`Wrote register ${address} = ${value}`);
+      } catch (error) {
+        this.logger.error(`Failed to write register ${address}: ${error.message}`);
+        throw error;
+      }
+    });
   }
 }

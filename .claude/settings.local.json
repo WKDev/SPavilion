@@ -4,7 +4,15 @@
       "Bash(npm install:*)",
       "Bash(npx prisma generate:*)",
       "Bash(npm run build:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(docker-compose ps:*)",
+      "Bash(docker-compose logs:*)",
+      "Bash(docker network inspect:*)",
+      "Bash(docker exec -it spavilion-nest-1 sh -c \"apk add --no-cache netcat-openbsd && nc -zv mock-modbus 502\")",
+      "Bash(docker exec:*)",
+      "Bash(docker cp:*)",
+      "Bash(docker-compose restart:*)",
+      "Bash(curl:*)"
     ],
     "deny": [],
     "ask": []

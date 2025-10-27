@@ -15,7 +15,7 @@ import { PLCPollingService } from "@/lib/plc-polling"
 import type { Device } from "@/lib/types"
 
 export function usePLCPolling(enabled = true, interval = 1000) {
-  const { updateDevice, setPolling } = useStore()
+  const { updateDevice, updateCoil, updateRegister, setPolling } = useStore()
   const devicePollingRef = useRef<DevicePollingService | null>(null)
   const plcPollingRef = useRef<PLCPollingService | null>(null)
   const [error, setError] = useState<Error | null>(null)
@@ -71,7 +71,7 @@ export function usePLCPolling(enabled = true, interval = 1000) {
         plcPollingRef.current.stop()
       }
     }
-  }, [enabled, interval, updateDevice, setPolling])
+  }, [enabled, interval, updateDevice, updateCoil, updateRegister, setPolling])
 
   return {
     isActive: devicePollingRef.current?.isActive() || false,

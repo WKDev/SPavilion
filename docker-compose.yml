@@ -78,7 +78,7 @@ services:
     ports:
       - "9554:8554"  # RTSP (using 9554 on host to avoid Windows port conflicts)
       - "8889:8889"  # WebRTC
-      - "8888:8888"  # HLS
+      - "8887:8890"  # HLS (changed from 8888 to 8887 to avoid Windows port conflict)
       - "8189:8189/udp"  # WebRTC UDP
 
     profiles:
