@@ -21,7 +21,8 @@ export interface AreaBox {
 export interface CameraArea {
   nickname: string
   box: AreaBox[]
-  colorCode: number
+  colorCode: number // Kept for backwards compatibility, use color instead
+  color: string // RGB hex value (e.g., "#ef4444")
   enabled: boolean
   visible: boolean
 }
@@ -186,6 +187,49 @@ export const useCameraAreaStore = create<CameraAreaState>()(
     }),
     {
       name: "camera-area-storage",
+    }
+  )
+)
+
+// Shortcut interface for custom PLC buttons
+export interface Shortcut {
+  id: string
+  buttonTitle: string
+  stateType: "coil" | "register"
+  statusAddr: number  // Address to read current state from (e.g., 0x00-0x07)
+  commandAddr: number // Address to write commands to (e.g., 0x10-0x17)
+  stateValue: number  // Max value for timer (used for register type)
+}
+
+interface ShortcutState {
+  shortcuts: Shortcut[]
+  addShortcut: (shortcut: Omit<Shortcut, "id">) => void
+  updateShortcut: (id: string, shortcut: Omit<Shortcut, "id">) => void
+  removeShortcut: (id: string) => void
+}
+
+export const useShortcutStore = create<ShortcutState>()(
+  persist(
+    (set) => ({
+      shortcuts: [],
+      addShortcut: (shortcut) =>
+        set((state) => ({
+          shortcuts: [
+            ...state.shortcuts,
+            { ...shortcut, id: `shortcut-${Date.now()}-${Math.random().toString(36).substring(2, 9)}` },
+          ],
+        })),
+      updateShortcut: (id, shortcut) =>
+        set((state) => ({
+          shortcuts: state.shortcuts.map((s) => (s.id === id ? { ...shortcut, id } : s)),
+        })),
+      removeShortcut: (id) =>
+        set((state) => ({
+          shortcuts: state.shortcuts.filter((s) => s.id !== id),
+        })),
+    }),
+    {
+      name: "shortcut-storage",
     }
   )
 )

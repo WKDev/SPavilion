@@ -39,6 +39,53 @@ export default function SettingsPage() {
       </div>
 
       <div className="grid gap-3 md:grid-cols-2">
+        {/* PLC Connection Settings */}
+        <Card>
+          <CardHeader>
+            <CardTitle>PLC Connection</CardTitle>
+            <CardDescription>Configure PLC device location and port</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="plc-host">Host</Label>
+                <Input
+                  id="plc-host"
+                  defaultValue="localhost"
+                  placeholder="localhost"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="plc-port">Port</Label>
+                <Input
+                  id="plc-port"
+                  defaultValue="502"
+                  placeholder="502"
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="plc-baud">Baud Rate</Label>
+              <Input
+                id="plc-baud"
+                defaultValue="9600"
+                placeholder="9600"
+              />
+              <p className="text-xs text-muted-foreground">Serial communication baud rate (for Modbus RTU)</p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="plc-device">Device Path</Label>
+              <Input
+                id="plc-device"
+                defaultValue="/dev/ttyUSB0"
+                placeholder="/dev/ttyUSB0"
+              />
+              <p className="text-xs text-muted-foreground">Serial device path for PLC connection</p>
+            </div>
+            <Button>Connect</Button>
+          </CardContent>
+        </Card>
+
         {/* PLC Polling Settings */}
         <Card>
           <CardHeader>
@@ -48,8 +95,8 @@ export default function SettingsPage() {
           <CardContent className="space-y-4">
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
-                
-                
+                <Label>Enable Polling</Label>
+                <p className="text-xs text-muted-foreground">Automatically fetch PLC status</p>
               </div>
               <Switch checked={pollingEnabled} onCheckedChange={handleTogglePolling} />
             </div>

@@ -3,17 +3,20 @@
 import { useEffect, useRef } from "react"
 import * as d3 from "d3"
 import type { HeatmapData } from "@/lib/api"
+import { useCameraAreaStore, type CameraArea } from "@/lib/store"
 
 interface HeatmapVisualizationProps {
   data: HeatmapData[]
   mode: "overlay" | "standalone"
   className?: string
   opacity?: number // 0-1 scale, default 0.6 for overlay, 0.8 for standalone
+  showCameraBoxes?: boolean // Show CameraBox overlays for debugging
 }
 
-export function HeatmapVisualization({ data, mode, className = "", opacity }: HeatmapVisualizationProps) {
+export function HeatmapVisualization({ data, mode, className = "", opacity, showCameraBoxes = false }: HeatmapVisualizationProps) {
   const svgRef = useRef<SVGSVGElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+  const { areas } = useCameraAreaStore()
 
   // Default opacity: 0.6 for overlay, 0.8 for standalone
   const effectiveOpacity = opacity ?? (mode === "overlay" ? 0.6 : 0.8)
@@ -277,7 +280,94 @@ export function HeatmapVisualization({ data, mode, className = "", opacity }: He
         .style("font-weight", "500")
         .attr("fill", "currentColor")
     }
-  }, [data, mode, effectiveOpacity])
+
+    // Draw CameraBox overlays for debugging (if enabled)
+    if (showCameraBoxes && areas.length > 0) {
+      const cameraBoxGroup = svg.append("g").attr("class", "camera-boxes")
+
+      // Color map for camera areas
+      const CAMERA_BOX_COLORS: Record<number, string> = {
+        1: "#ef4444", 2: "#22c55e", 3: "#3b82f6", 4: "#a855f7", 5: "#f97316",
+        6: "#06b6d4", 7: "#ec4899", 8: "#eab308", 9: "#f43f5e", 10: "#14b8a6"
+      }
+
+      areas.forEach((area) => {
+        if (!area.enabled || !area.visible) return
+
+        const color = CAMERA_BOX_COLORS[area.colorCode] || "#ffffff"
+
+        area.box.forEach((box) => {
+          // Scale box coordinates from FHD to current display size
+          const scaledBox = {
+            x1: box.x1 * scale,
+            y1: box.y1 * scale,
+            x2: box.x2 * scale,
+            y2: box.y2 * scale,
+          }
+
+          const boxWidth = scaledBox.x2 - scaledBox.x1
+          const boxHeight = scaledBox.y2 - scaledBox.y1
+
+          // Draw box rectangle
+          cameraBoxGroup
+            .append("rect")
+            .attr("x", scaledBox.x1)
+            .attr("y", scaledBox.y1)
+            .attr("width", boxWidth)
+            .attr("height", boxHeight)
+            .attr("fill", "none")
+            .attr("stroke", color)
+            .attr("stroke-width", 3)
+            .attr("stroke-dasharray", "8,4")
+            .style("pointer-events", "none")
+
+          // Draw label
+          cameraBoxGroup
+            .append("text")
+            .attr("x", scaledBox.x1 + boxWidth / 2)
+            .attr("y", scaledBox.y1 + boxHeight / 2)
+            .attr("text-anchor", "middle")
+            .attr("dominant-baseline", "middle")
+            .text(area.nickname)
+            .style("font-size", "16px")
+            .style("font-weight", "bold")
+            .attr("fill", color)
+            .attr("stroke", "#000000")
+            .attr("stroke-width", 3)
+            .attr("paint-order", "stroke")
+            .style("pointer-events", "none")
+
+          // Draw corner coordinates (top-left and bottom-right)
+          cameraBoxGroup
+            .append("text")
+            .attr("x", scaledBox.x1 + 5)
+            .attr("y", scaledBox.y1 + 15)
+            .text(`(${Math.round(box.x1)}, ${Math.round(box.y1)})`)
+            .style("font-size", "10px")
+            .style("font-weight", "600")
+            .attr("fill", color)
+            .attr("stroke", "#000000")
+            .attr("stroke-width", 2)
+            .attr("paint-order", "stroke")
+            .style("pointer-events", "none")
+
+          cameraBoxGroup
+            .append("text")
+            .attr("x", scaledBox.x2 - 5)
+            .attr("y", scaledBox.y2 - 5)
+            .attr("text-anchor", "end")
+            .text(`(${Math.round(box.x2)}, ${Math.round(box.y2)})`)
+            .style("font-size", "10px")
+            .style("font-weight", "600")
+            .attr("fill", color)
+            .attr("stroke", "#000000")
+            .attr("stroke-width", 2)
+            .attr("paint-order", "stroke")
+            .style("pointer-events", "none")
+        })
+      })
+    }
+  }, [data, mode, effectiveOpacity, showCameraBoxes, areas])
 
   return (
     <div

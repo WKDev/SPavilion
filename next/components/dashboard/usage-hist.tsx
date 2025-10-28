@@ -57,7 +57,7 @@ export function UsageHist() {
             <p className="text-muted-foreground">No usage data available for this time range</p>
           </div>
         ) : (
-          <Histogram data={data} />
+          <Histogram data={data} startDate={timeRange.from} endDate={timeRange.to} />
         )}
       </CardContent>
     </Card>

@@ -53,32 +53,35 @@ export function TimeRangeSelector() {
     }
   }, [timeRange.selectedRange])
 
-  // Calculate display range
-  const displayRange = (() => {
-    if (timeRange.customRangeLabel) {
-      return timeRange.customRangeLabel
-    }
-
-    const start = new Date(timeRange.fromDate)
-    start.setHours(
-      parseInt(timeRange.fromTime.split(":")[0]),
-      parseInt(timeRange.fromTime.split(":")[1]),
-      0,
-      0
-    )
-    const end = new Date(timeRange.toDate)
-    end.setHours(
-      parseInt(timeRange.toTime.split(":")[0]),
-      parseInt(timeRange.toTime.split(":")[1]),
-      59,
-      999
-    )
-
-    return `${format(start, "yy/MM/dd HH:mm")} - ${format(end, "yy/MM/dd HH:mm")}`
-  })()
-
   return (
-    <div className="flex flex-col gap-1 relative">
+    <div className="flex items-center gap-4 relative">
+      <div className="flex flex-col gap-0.5 text-xs text-muted-foreground font-mono whitespace-pre-line">
+        {(() => {
+          const start = new Date(timeRange.fromDate)
+          start.setHours(
+            parseInt(timeRange.fromTime.split(":")[0]),
+            parseInt(timeRange.fromTime.split(":")[1]),
+            0,
+            0
+          )
+          const end = new Date(timeRange.toDate)
+          end.setHours(
+            parseInt(timeRange.toTime.split(":")[0]),
+            parseInt(timeRange.toTime.split(":")[1]),
+            59,
+            999
+          )
+          const startStr = format(start, "yy/MM/dd HH:mm")
+          const endStr = format(end, "yy/MM/dd HH:mm")
+          return (
+            <>
+              <div>시작: {startStr}</div>
+              <div>종료: {endStr}</div>
+            </>
+          )
+        })()}
+      </div>
+
       <ToggleGroup
         type="single"
         value={timeRange.selectedRange}
@@ -91,8 +94,6 @@ export function TimeRangeSelector() {
         <ToggleGroupItem value="30d">30d</ToggleGroupItem>
         <ToggleGroupItem value="custom">Custom</ToggleGroupItem>
       </ToggleGroup>
-
-      <span className="text-xs text-muted-foreground font-mono">{displayRange}</span>
 
       <Popover open={isCustomPopoverOpen} onOpenChange={setIsCustomPopoverOpen}>
         <PopoverTrigger asChild>

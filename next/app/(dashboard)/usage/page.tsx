@@ -1,20 +1,31 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { Card, CardContent, CardHeader } from "@/components/ui/card"
-import { Histogram } from "@/components/usage/histogram"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { DeviceHistogram } from "@/components/usage/device-histogram"
 import { api, type HistogramData, type HeatmapData } from "@/lib/api"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { HeatmapChart } from "@/components/usage/heatmap-chart"
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { useStore } from "@/lib/store"
 
 export default function UsagePage() {
   const [histogramData, setHistogramData] = useState<HistogramData[]>([])
   const [heatmapData, setHeatmapData] = useState<HeatmapData[]>([])
   const [loading, setLoading] = useState(true)
-  const [selectedDevices, setSelectedDevices] = useState<string[]>(["heat", "fan", "btsp"])
   const timeRangeState = useStore((state) => state.timeRange)
+
+  // Device list for separate histograms
+  const devices = ["heat", "fan", "btsp", "light-red", "light-green", "light-blue", "light-white", "display"]
+  const deviceLabels: Record<string, string> = {
+    heat: "Heat",
+    fan: "Fan",
+    btsp: "BTSP",
+    "light-red": "Light (Red)",
+    "light-green": "Light (Green)",
+    "light-blue": "Light (Blue)",
+    "light-white": "Light (White)",
+    display: "Display",
+  }
 
   // Convert global time range state to { from, to } format with useMemo
   const timeRange = useMemo(() => {
@@ -46,8 +57,6 @@ export default function UsagePage() {
     fetchData()
   }, [timeRange])
 
-  const filteredHistogramData = histogramData.filter((item) => selectedDevices.includes(item.device))
-
   return (
     <div className="space-y-3">
       <div>
@@ -63,43 +72,40 @@ export default function UsagePage() {
         </TabsList>
 
         <TabsContent value="histogram">
-          <Card>
-            <CardHeader>
-              <div className="flex flex-wrap items-center gap-3">
-                <span className="text-sm font-medium">Devices:</span>
-                <ToggleGroup
-                  type="multiple"
-                  value={selectedDevices}
-                  onValueChange={(value) => {
-                    if (value.length > 0) {
-                      setSelectedDevices(value)
-                    }
-                  }}
-                >
-                  <ToggleGroupItem value="heat">Heat</ToggleGroupItem>
-                  <ToggleGroupItem value="fan">Fan</ToggleGroupItem>
-                  <ToggleGroupItem value="btsp">BTSP</ToggleGroupItem>
-                </ToggleGroup>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {loading ? (
-                <div className="flex h-[400px] items-center justify-center">
-                  <p className="text-muted-foreground">Loading histogram data...</p>
-                </div>
-              ) : filteredHistogramData.length === 0 ? (
-                <div className="flex h-[400px] items-center justify-center">
-                  <p className="text-muted-foreground">No histogram data available for selected devices</p>
-                </div>
-              ) : (
-                <Histogram 
-                  data={filteredHistogramData} 
-                  startDate={timeRange.from} 
-                  endDate={timeRange.to} 
-                />
-              )}
-            </CardContent>
-          </Card>
+          {loading ? (
+            <Card>
+              <CardContent className="flex h-[400px] items-center justify-center">
+                <p className="text-muted-foreground">Loading histogram data...</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid gap-3 md:grid-cols-2">
+              {devices.map((device) => {
+                const deviceData = histogramData.filter((item) => item.device === device)
+                return (
+                  <Card key={device}>
+                    <CardHeader>
+                      <CardTitle className="text-lg">{deviceLabels[device]} Usage</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      {deviceData.length === 0 ? (
+                        <div className="flex h-[200px] items-center justify-center">
+                          <p className="text-sm text-muted-foreground">No data available</p>
+                        </div>
+                      ) : (
+                        <DeviceHistogram
+                          data={deviceData}
+                          deviceName={deviceLabels[device]}
+                          startDate={timeRange.from}
+                          endDate={timeRange.to}
+                        />
+                      )}
+                    </CardContent>
+                  </Card>
+                )
+              })}
+            </div>
+          )}
         </TabsContent>
 
         <TabsContent value="heatmap">

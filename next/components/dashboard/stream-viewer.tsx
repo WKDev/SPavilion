@@ -31,7 +31,16 @@ export function StreamViewer() {
   const canvasRef = useRef<HTMLCanvasElement>(null!)
   const surveillanceCanvasRef = useRef<HTMLCanvasElement>(null)
   const webrtcRef = useRef<WebRTCManager | null>(null)
-  const [selectedViews, setSelectedViews] = useState<ViewOption[]>(["video"])
+
+  // Load saved settings from localStorage
+  const [selectedViews, setSelectedViews] = useState<ViewOption[]>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("stream-viewer-viewmode")
+      return saved ? JSON.parse(saved) : ["video"]
+    }
+    return ["video"]
+  })
+
   const [isConnecting, setIsConnecting] = useState(false)
   const [isConnected, setIsConnected] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -43,7 +52,13 @@ export function StreamViewer() {
   const { areas } = useCameraAreaStore()
 
   // Overlay opacity (0-100, maps to 0-1 for HeatmapVisualization)
-  const [opacity, setOpacity] = useState(60)
+  const [opacity, setOpacity] = useState(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("stream-viewer-opacity")
+      return saved ? parseInt(saved, 10) : 60
+    }
+    return 60
+  })
 
   // Convert global time range state to { from, to } format for HeatmapOverlay with useMemo
   const timeRange = useMemo(() => {
@@ -57,6 +72,20 @@ export function StreamViewer() {
 
     return { from: fromDate, to: toDate }
   }, [timeRangeState.fromDate, timeRangeState.toDate, timeRangeState.fromTime, timeRangeState.toTime])
+
+  // Save selectedViews to localStorage when it changes
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("stream-viewer-viewmode", JSON.stringify(selectedViews))
+    }
+  }, [selectedViews])
+
+  // Save opacity to localStorage when it changes
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("stream-viewer-opacity", opacity.toString())
+    }
+  }, [opacity])
 
   useEffect(() => {
     // Initialize WebRTC connection
@@ -114,7 +143,12 @@ export function StreamViewer() {
       areas.forEach((area) => {
         if (!area.visible) return // Skip if not visible
 
-        const color = COLOR_MAP[area.colorCode] || COLOR_MAP[1]
+        // Use the custom color field, fallback to colorCode mapping
+        const customColor = area.color || COLOR_MAP[area.colorCode]?.stroke || "#ef4444"
+        const color = {
+          stroke: customColor,
+          fill: `${customColor}26`, // Add 15% opacity (26 in hex)
+        }
 
         area.box.forEach((box) => {
           // Set colors and styles

@@ -4,13 +4,14 @@ import { useEffect, useRef } from "react"
 import * as d3 from "d3"
 import type { HistogramData } from "@/lib/api"
 
-interface HistogramProps {
+interface DeviceHistogramProps {
   data: HistogramData[]
+  deviceName: string
   startDate: Date
   endDate: Date
 }
 
-export function Histogram({ data, startDate, endDate }: HistogramProps) {
+export function DeviceHistogram({ data, deviceName, startDate, endDate }: DeviceHistogramProps) {
   const svgRef = useRef<SVGSVGElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -20,7 +21,7 @@ export function Histogram({ data, startDate, endDate }: HistogramProps) {
     const container = containerRef.current
     const margin = { top: 20, right: 30, bottom: 40, left: 50 }
     const width = container.clientWidth - margin.left - margin.right
-    const height = 300 - margin.top - margin.bottom
+    const height = 250 - margin.top - margin.bottom
 
     // Clear previous chart
     d3.select(svgRef.current).selectAll("*").remove()
@@ -41,37 +42,30 @@ export function Histogram({ data, startDate, endDate }: HistogramProps) {
     let tickInterval: d3.TimeInterval | null = null
     let tickFormat: (date: Date) => string = d3.timeFormat("%H:%M")
 
-    // Match requirements: 1h→10min, 6h→1h, 24h→1h, 7d→1d, 30d→1d
     if (timeRangeHours <= 1) {
-      // 1h : 10min
       tickInterval = d3.timeMinute.every(10)
       tickFormat = d3.timeFormat("%H:%M")
-    } else if (timeRangeHours <= 6) {
-      // 6h : 1h
-      tickInterval = d3.timeHour.every(1)
-      tickFormat = d3.timeFormat("%H:%M")
     } else if (timeRangeHours <= 24) {
-      // 24h : 1h
       tickInterval = d3.timeHour.every(1)
       tickFormat = d3.timeFormat("%H:%M")
     } else if (timeRangeDays <= 7) {
-      // 7d : 1d
+      tickInterval = d3.timeDay.every(1)
+      tickFormat = d3.timeFormat("%m/%d")
+    } else if (timeRangeDays <= 14) {
       tickInterval = d3.timeDay.every(1)
       tickFormat = d3.timeFormat("%m/%d")
     } else if (timeRangeDays <= 30) {
-      // 30d : 1d
       tickInterval = d3.timeDay.every(1)
       tickFormat = d3.timeFormat("%m/%d")
     } else {
-      // Custom range beyond 30d: auto-configure
       if (timeRangeDays <= 90) {
-        tickInterval = d3.timeDay.every(7) // Weekly
+        tickInterval = d3.timeDay.every(7)
         tickFormat = d3.timeFormat("%m/%d")
       } else if (timeRangeDays <= 365) {
-        tickInterval = d3.timeMonth.every(1) // Monthly
+        tickInterval = d3.timeMonth.every(1)
         tickFormat = d3.timeFormat("%Y/%m")
       } else {
-        tickInterval = d3.timeMonth.every(3) // Quarterly
+        tickInterval = d3.timeMonth.every(3)
         tickFormat = d3.timeFormat("%Y/%m")
       }
     }
@@ -82,25 +76,12 @@ export function Histogram({ data, startDate, endDate }: HistogramProps) {
       date: parseTime(d.timestamp) || new Date(),
     }))
 
-    // Group data by device and time bucket
-    const devices = Array.from(new Set(data.map((d) => d.device)))
-    const color = d3.scaleOrdinal(d3.schemeCategory10).domain(devices)
-
-    // Create time buckets using the determined interval
+    // Bucket data by time interval
     const bucketedData = d3.rollup(
       dataWithDates,
       (v) => d3.sum(v, (d) => d.value),
       (d) => tickInterval?.floor(d.date) || d.date,
-      (d) => d.device,
     )
-
-    // Flatten the bucketed data
-    const flatData: Array<{ date: Date; device: string; value: number }> = []
-    bucketedData.forEach((deviceMap, date) => {
-      deviceMap.forEach((value, device) => {
-        flatData.push({ date, device, value })
-      })
-    })
 
     // Generate all ticks in the query range
     const allTicks: Date[] = []
@@ -112,16 +93,22 @@ export function Histogram({ data, startDate, endDate }: HistogramProps) {
       }
     }
 
-    // Create scales using the full query range
+    // Create flat data with all ticks
+    const flatData = allTicks.map(tick => ({
+      date: tick,
+      value: bucketedData.get(tick) || 0
+    }))
+
+    // Create scales
     const x = d3
       .scaleBand()
       .domain(allTicks.map(d => d.toISOString()))
       .range([0, width])
-      .padding(0.1)
+      .padding(0.2)
 
     const y = d3
       .scaleLinear()
-      .domain([0, d3.max(flatData, (d) => d.value) || 0])
+      .domain([0, d3.max(flatData, (d) => d.value) || 1])
       .nice()
       .range([height, 0])
 
@@ -142,7 +129,7 @@ export function Histogram({ data, startDate, endDate }: HistogramProps) {
       .attr("transform", "rotate(-45)")
 
     // Add Y axis
-    svg.append("g").call(d3.axisLeft(y))
+    svg.append("g").call(d3.axisLeft(y).ticks(5))
 
     // Add Y axis label
     svg
@@ -152,68 +139,26 @@ export function Histogram({ data, startDate, endDate }: HistogramProps) {
       .attr("x", 0 - height / 2)
       .attr("dy", "1em")
       .style("text-anchor", "middle")
-      .text("Usage Value")
+      .style("font-size", "12px")
+      .text("Count")
       .attr("fill", "currentColor")
 
-    // Group bars by time bucket
-    const barWidth = x.bandwidth() / devices.length
-
-    // Add bars for each device
-    devices.forEach((device, i) => {
-      // Create data for all ticks, filling missing data with 0
-      const deviceData = allTicks.map(tick => {
-        const existingData = flatData.find(d => 
-          d.device === device && 
-          tickInterval ? tickInterval.floor(d.date).getTime() === tick.getTime() : d.date.getTime() === tick.getTime()
-        )
-        return {
-          date: tick,
-          device,
-          value: existingData?.value || 0
-        }
-      })
-
-      svg
-        .selectAll(`.bar-${device}`)
-        .data(deviceData)
-        .enter()
-        .append("rect")
-        .attr("class", `bar-${device}`)
-        .attr("x", (d) => (x(d.date.toISOString()) || 0) + barWidth * i)
-        .attr("y", (d) => y(d.value))
-        .attr("width", barWidth)
-        .attr("height", (d) => height - y(d.value))
-        .attr("fill", color(device))
-        .append("title")
-        .text((d) => `${device}\n${d3.timeFormat("%Y-%m-%d %H:%M")(d.date)}\nValue: ${d.value}`)
-    })
-    // </CHANGE>
-
-    // Add legend
-    const legend = svg
-      .selectAll(".legend")
-      .data(devices)
+    // Add bars
+    svg
+      .selectAll(".bar")
+      .data(flatData)
       .enter()
-      .append("g")
-      .attr("class", "legend")
-      .attr("transform", (d, i) => `translate(0,${i * 20})`)
-
-    legend
       .append("rect")
-      .attr("x", width - 18)
-      .attr("width", 18)
-      .attr("height", 18)
-      .style("fill", (d) => color(d))
-
-    legend
-      .append("text")
-      .attr("x", width - 24)
-      .attr("y", 9)
-      .attr("dy", ".35em")
-      .style("text-anchor", "end")
-      .text((d) => d)
-      .attr("fill", "currentColor")
-  }, [data, startDate, endDate])
+      .attr("class", "bar")
+      .attr("x", (d) => x(d.date.toISOString()) || 0)
+      .attr("y", (d) => y(d.value))
+      .attr("width", x.bandwidth())
+      .attr("height", (d) => height - y(d.value))
+      .attr("fill", "hsl(var(--primary))")
+      .attr("opacity", 0.8)
+      .append("title")
+      .text((d) => `${deviceName}\n${d3.timeFormat("%Y-%m-%d %H:%M")(d.date)}\nCount: ${d.value}`)
+  }, [data, deviceName, startDate, endDate])
 
   return (
     <div ref={containerRef} className="w-full">

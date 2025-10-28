@@ -150,7 +150,12 @@ export function CameraAreaSelector() {
         if (!area.visible) return // Skip if not visible
 
         const isSelected = selectedAreaIndex === areaIndex
-        const color = COLOR_MAP[area.colorCode] || COLOR_MAP[1]
+        // Use the custom color field, fallback to colorCode mapping
+        const customColor = area.color || COLOR_MAP[area.colorCode]?.stroke || "#ef4444"
+        const color = {
+          stroke: customColor,
+          fill: `${customColor}26`, // Add 15% opacity (26 in hex)
+        }
 
         area.box.forEach((box, boxIndex) => {
           const isHovered = hoveredBox?.areaIndex === areaIndex && hoveredBox?.boxIndex === boxIndex
@@ -479,10 +484,14 @@ export function CameraAreaSelector() {
   const handleCreateArea = () => {
     if (!newAreaNickname.trim()) return
 
+    const colorCode = getNextColorCode()
+    const defaultColor = COLOR_MAP[colorCode]?.stroke || "#ef4444"
+
     addArea({
       nickname: newAreaNickname,
       box: [],
-      colorCode: getNextColorCode(),
+      colorCode: colorCode,
+      color: defaultColor,
       enabled: true,
       visible: true,
     })
@@ -608,7 +617,7 @@ export function CameraAreaSelector() {
             <p className="text-sm text-muted-foreground text-center py-4">등록된 영역이 없습니다</p>
           ) : (
             areas.map((area, areaIndex) => {
-              const color = COLOR_MAP[area.colorCode] || COLOR_MAP[1]
+              const customColor = area.color || COLOR_MAP[area.colorCode]?.stroke || "#ef4444"
               const isCollapsed = collapsedAreas.has(areaIndex)
               return (
                 <div
@@ -618,7 +627,7 @@ export function CameraAreaSelector() {
                     selectedAreaIndex === areaIndex && "border-primary bg-primary/5"
                   )}
                   style={{
-                    borderColor: selectedAreaIndex === areaIndex ? color.stroke : undefined,
+                    borderColor: selectedAreaIndex === areaIndex ? customColor : undefined,
                   }}
                 >
                   {/* Area Header */}
@@ -632,7 +641,7 @@ export function CameraAreaSelector() {
                       ) : (
                         <ChevronDown className="h-4 w-4" />
                       )}
-                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: color.stroke }} />
+                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: customColor }} />
                       {editingAreaIndex === areaIndex ? (
                         <Input
                           value={editingNickname}
@@ -718,6 +727,28 @@ export function CameraAreaSelector() {
                           checked={area.enabled}
                           onCheckedChange={() => toggleAreaEnabled(areaIndex)}
                         />
+                      </div>
+
+                      {/* Color Picker */}
+                      <div className="flex items-center justify-between">
+                        <Label htmlFor={`area-color-${areaIndex}`} className="text-xs text-muted-foreground">
+                          영역 색상
+                        </Label>
+                        <div className="flex items-center gap-2">
+                          <input
+                            id={`area-color-${areaIndex}`}
+                            type="color"
+                            value={customColor}
+                            onChange={(e) => {
+                              updateArea(areaIndex, {
+                                ...area,
+                                color: e.target.value,
+                              })
+                            }}
+                            className="w-8 h-8 rounded cursor-pointer border border-input"
+                          />
+                          <span className="text-xs text-muted-foreground font-mono">{customColor}</span>
+                        </div>
                       </div>
 
                       {/* Box Count */}

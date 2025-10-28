@@ -14,8 +14,6 @@ import { cn } from "@/lib/utils"
 
 export function PLCDebug() {
   const { plc, updateCoil, updateRegister } = useStore()
-  const [plcHost, setPlcHost] = useState("localhost")
-  const [plcPort, setPlcPort] = useState("502")
   const [registerDisplayMode, setRegisterDisplayMode] = useState<"decimal" | "hex">("decimal")
   
   // 주소 범위 상태
@@ -90,32 +88,6 @@ export function PLCDebug() {
 
   return (
     <div className="space-y-4">
-      {/* PLC Connection Settings */}
-      <Card>
-        <CardHeader>
-          <CardTitle>PLC Connection</CardTitle>
-          <CardDescription>Configure PLC device location and port</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="plc-host">Host</Label>
-              <Input
-                id="plc-host"
-                value={plcHost}
-                onChange={(e) => setPlcHost(e.target.value)}
-                placeholder="localhost"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="plc-port">Port</Label>
-              <Input id="plc-port" value={plcPort} onChange={(e) => setPlcPort(e.target.value)} placeholder="502" />
-            </div>
-          </div>
-          <Button>Connect</Button>
-        </CardContent>
-      </Card>
-
       {/* Error Display */}
       {error && (
         <Card>

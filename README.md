@@ -840,16 +840,59 @@ feel free to ask something unclear before get started.
 - resize handle, remove button is hidden or removed in stream-viewer.
 
 
-0. stream-viewer viewmode , opacity localstorage 상태 저장
-1. time selector horizontal, 시작: {} \ㅜ 종료 : {} 로 재배치, 항목은 1h,6h, 24h,7d, 30d
-2. stay-rate, detection-service/main.py 업로드할 때의 좌표계, heatmap 표시 좌표계, CameraBox 좌표계, stay-rate 컴포넌트에서 CameraBox와 heatmap 비교시의 좌표계
-3. usage history 제대로 표시되게, usage 메뉴에서는 항목별로 히스토그램 n개 작성, x축 범위, tick은  time selector state에 따라 다음과 같이 tick 설정
+
+[모든 기능과 컴포넌트의 좌표계 일치 여부 점검]
+- 문제상황: stay-rate 컴포넌트 결과를 보니, 히트맵 값이 낮은곳이 순위가 더 높았음. 
+- 문제 해결 팁: detection-service, nest,db, next 순으로 bottom-up 식으로 조사
+- 의심 원인: 
+  - ../detection-service/main.py에서 탐지 결과 저장할 때, x,y 좌표계 방향과, hitmap의 x,y 좌표계가 달라서?
+  - hitmap의 x,y 좌표와 CameraBox의 x,y 좌표계 방향이 달라서?
+  - 아무튼 어딘가에서 좌표계가 서로 맞지 않는 것은 확실함. 한가지로 통일 필요
+
+- 현재까지 알고 있는 것: 
+  - yolo detection에 의해 나오는 좌표: 왼쪽 위가 0,0, 오른쪽 아래가 끝.
+  - heatmap 표시 좌표: 왼쪽 아래가 0,0, 오른쪽 위가 \inf
+
+- 할 일: stay-rate, detection-service/main.py 업로드할 때의 좌표계, heatmap 표시 좌표계, CameraBox 좌표계, stay-rate 컴포넌트에서 CameraBox와 heatmap 비교시의 좌표계가 모두 일치하는지 점검
+
+*작업 진행 전 궁금한 거 있으면 물어보고 진행할 것.
+[component: stream-viewer]viewmode, opacity 값 localstorage 상태 저장 및 로드
+[component: TimeRangeSelector] ToggleGroup 우측에 배치된 시간 범위 표기 텍스트를 "시작: {datetime} \n 종료 : {datetime}"로 좌측에 재배치.
+[component: stay-rate]순위권에 각 감시영역을 나타내는 색 사용.
+[component: Histogram]TimeRangeSelector state에 따라 다음과 같이 xtick 설정
   - 1h : 10min
   - 6h : 1h
   - 24h : 1h
   - 7d : 1d
   - 30d : 1d
 
-4. stay-rate에 각 감시 영역이 가진 고유 색 표현
-5. camera-area-selector 각 감시 영역별로 색 설정할 수 있도록 하기
-6. /device-management의 advanced / plc 연결 설정을 /setting로 이동
+[component: Histogram]쿼리한 시간 범위에 데이터가 없어도,일단 x축은 생성(24h 범위 쿼리 결과를 표시할 때, 최근 1시간 데이터만 있다 해도 x축은 24h에 대해 표시되어야 함.)
+[component: camera-area-selector] 각 감시 영역에 대해 색 할당 및 수정할 수 있는 기능 추가. 숫자 기반의 컬러맵 대신 그냥 CameraBox interface에 rgb hex값 사용.
+
+
+
+*작업 진행 전 궁금한 거 있으면 물어보고 진행할 것.
+[page: /usage] 한 차트에 여러 legend의 데이터 표시하는 대신, 히스토그램을 항목별로(시간당 heat 실행횟수, 시간당 fan 실행횟수...) 생성.
+[page: /device-management] advanced 탭 안에 있는 'plc 연결 설정'을 /setting로 이동
+[page: /device-management] 
+- Basic tab rename to: "shortcuts"
+- make this tab more versatile
+  - add, edit, remove shortcuts.
+  - put following informations to add shortcut
+    - button_title: {string}
+    - state_type: {string as "coil"|"register"}
+    - command_addr: {number}
+    - state_value: {number}
+
+  [compoennt: TMButton] edit props
+  - props:
+    state_type: {string as "coil"|"register"}
+    command_addr: {number}
+    state_value: {number}
+
+  - user can add button with following attributes:
+    - state(it can be coil value, or register value.)
+    - state as coil: set color to green/gray according to coil state.
+    - state as register: set progressbar on the button according to the register value, text label to check the remain.
+
+
