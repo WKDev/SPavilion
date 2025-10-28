@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Read(//c/Users/Tutor_06/Desktop/SPavilion/**)",
-      "Bash(tree:*)"
+      "Bash(tree:*)",
+      "Bash(yarn build:*)",
+      "mcp__ide__getDiagnostics"
     ],
     "deny": [],
     "ask": []

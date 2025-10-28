@@ -6,8 +6,11 @@ import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { usePLCPolling } from "@/hooks/use-plc-polling"
 import { useStore } from "@/lib/store"
+import { CameraAreaSelector } from "@/components/settings/camera-area-selector"
+import { Camera } from "lucide-react"
 
 export default function SettingsPage() {
   const isPolling = useStore((state) => state.isPolling)
@@ -128,8 +131,26 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
 
-        {/* Display Settings */}
-        
+        {/* Camera Area Settings */}
+        <Card>
+          <CardHeader>
+            <CardTitle>카메라 감시 영역</CardTitle>
+            <CardDescription>카메라 스트림에서 감시할 영역을 지정합니다</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button className="w-full" variant="outline">
+                  <Camera className="mr-2 h-4 w-4" />
+                  감시 영역 설정
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="overflow-auto">
+                <CameraAreaSelector />
+              </DialogContent>
+            </Dialog>
+          </CardContent>
+        </Card>
       </div>
     </div>
   )

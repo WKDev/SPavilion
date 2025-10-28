@@ -1,64 +1,87 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect } from "react"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Button } from "@/components/ui/button"
 import { Calendar } from "@/components/ui/calendar"
-import { CalendarIcon } from "lucide-react"
+import { Input } from "@/components/ui/input"
 import { format } from "date-fns"
-import { cn } from "@/lib/utils"
+import { useStore, type TimeRange } from "@/lib/store"
+import { useState } from "react"
 
-type TimeRange = "1h" | "6h" | "24h" | "7d" | "30d" | "custom"
+export function TimeRangeSelector() {
+  const timeRange = useStore((state) => state.timeRange)
+  const setTimeRange = useStore((state) => state.setTimeRange)
+  const setCustomTimeRange = useStore((state) => state.setCustomTimeRange)
 
-interface TimeRangeSelectorProps {
-  onRangeChange: (from: Date, to: Date) => void
-}
-
-export function TimeRangeSelector({ onRangeChange }: TimeRangeSelectorProps) {
-  const [selectedRange, setSelectedRange] = useState<TimeRange>("24h")
-  const [fromDate, setFromDate] = useState<Date>(new Date())
-  const [toDate, setToDate] = useState<Date>(new Date())
+  // Local state for custom popover
+  const [isCustomPopoverOpen, setIsCustomPopoverOpen] = useState(false)
+  const [localFromDate, setLocalFromDate] = useState<Date>(timeRange.fromDate)
+  const [localToDate, setLocalToDate] = useState<Date>(timeRange.toDate)
+  const [localFromTime, setLocalFromTime] = useState<string>(timeRange.fromTime)
+  const [localToTime, setLocalToTime] = useState<string>(timeRange.toTime)
 
   const handleRangeChange = (range: TimeRange) => {
-    setSelectedRange(range)
-    const now = new Date()
-    let from = new Date()
-
-    switch (range) {
-      case "1h":
-        from = new Date(now.getTime() - 60 * 60 * 1000)
-        break
-      case "6h":
-        from = new Date(now.getTime() - 6 * 60 * 60 * 1000)
-        break
-      case "24h":
-        from = new Date(now.getTime() - 24 * 60 * 60 * 1000)
-        break
-      case "7d":
-        from = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
-        break
-      case "30d":
-        from = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
-        break
-      case "custom":
-        return // Don't update dates for custom range
+    if (range === "custom") {
+      setIsCustomPopoverOpen(true)
     }
-
-    setFromDate(from)
-    setToDate(now)
-    onRangeChange(from, now)
+    setTimeRange(range)
   }
 
   const handleCustomDateChange = () => {
-    onRangeChange(fromDate, toDate)
+    // Combine date and time
+    const [fromHour, fromMinute] = localFromTime.split(":").map(Number)
+    const [toHour, toMinute] = localToTime.split(":").map(Number)
+
+    const fromDateTime = new Date(localFromDate)
+    fromDateTime.setHours(fromHour, fromMinute, 0, 0)
+
+    const toDateTime = new Date(localToDate)
+    toDateTime.setHours(toHour, toMinute, 59, 999)
+
+    const label = `${format(fromDateTime, "MM/dd HH:mm")} - ${format(toDateTime, "MM/dd HH:mm")}`
+
+    setCustomTimeRange(localFromDate, localToDate, localFromTime, localToTime, label)
+    setIsCustomPopoverOpen(false)
   }
 
+  // Open popover when custom is selected
+  useEffect(() => {
+    if (timeRange.selectedRange === "custom") {
+      setIsCustomPopoverOpen(true)
+    }
+  }, [timeRange.selectedRange])
+
+  // Calculate display range
+  const displayRange = (() => {
+    if (timeRange.customRangeLabel) {
+      return timeRange.customRangeLabel
+    }
+
+    const start = new Date(timeRange.fromDate)
+    start.setHours(
+      parseInt(timeRange.fromTime.split(":")[0]),
+      parseInt(timeRange.fromTime.split(":")[1]),
+      0,
+      0
+    )
+    const end = new Date(timeRange.toDate)
+    end.setHours(
+      parseInt(timeRange.toTime.split(":")[0]),
+      parseInt(timeRange.toTime.split(":")[1]),
+      59,
+      999
+    )
+
+    return `${format(start, "yy/MM/dd HH:mm")} - ${format(end, "yy/MM/dd HH:mm")}`
+  })()
+
   return (
-    <div className="flex flex-wrap items-center gap-4">
+    <div className="flex flex-col gap-1 relative">
       <ToggleGroup
         type="single"
-        value={selectedRange}
+        value={timeRange.selectedRange}
         onValueChange={(value) => value && handleRangeChange(value as TimeRange)}
       >
         <ToggleGroupItem value="1h">1h</ToggleGroupItem>
@@ -69,37 +92,104 @@ export function TimeRangeSelector({ onRangeChange }: TimeRangeSelectorProps) {
         <ToggleGroupItem value="custom">Custom</ToggleGroupItem>
       </ToggleGroup>
 
-      {selectedRange === "custom" && (
-        <div className="flex items-center gap-2">
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="outline" className={cn("justify-start text-left font-normal")}>
-                <CalendarIcon className="mr-2 h-4 w-4" />
-                {format(fromDate, "PPP")}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0">
-              <Calendar mode="single" selected={fromDate} onSelect={(date) => date && setFromDate(date)} />
-            </PopoverContent>
-          </Popover>
+      <span className="text-xs text-muted-foreground font-mono">{displayRange}</span>
 
-          <span className="text-sm text-muted-foreground">to</span>
-
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="outline" className={cn("justify-start text-left font-normal")}>
-                <CalendarIcon className="mr-2 h-4 w-4" />
-                {format(toDate, "PPP")}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0">
-              <Calendar mode="single" selected={toDate} onSelect={(date) => date && setToDate(date)} />
-            </PopoverContent>
-          </Popover>
-
-          <Button onClick={handleCustomDateChange}>Apply</Button>
-        </div>
-      )}
+      <Popover open={isCustomPopoverOpen} onOpenChange={setIsCustomPopoverOpen}>
+        <PopoverTrigger asChild>
+          <button className="absolute top-0 left-0 w-0 h-0 opacity-0 pointer-events-none" />
+        </PopoverTrigger>
+        <PopoverContent className="p-3 w-auto" align="start" side="bottom" sideOffset={8}>
+          <div className="flex gap-3">
+            <div className="flex flex-col gap-2">
+              <label className="text-xs font-medium">Start</label>
+              <div className="border rounded-md overflow-hidden">
+                <Calendar
+                  mode="single"
+                  selected={localFromDate}
+                  onSelect={(date) => date && setLocalFromDate(date)}
+                  className="p-2"
+                  classNames={{
+                    months: "flex flex-col",
+                    month: "space-y-2",
+                    caption: "flex justify-center relative items-center px-1",
+                    caption_label: "text-xs font-medium",
+                    nav: "space-x-1 flex items-center",
+                    nav_button: "h-6 w-6 bg-transparent p-0 opacity-50 hover:opacity-100",
+                    nav_button_previous: "absolute left-0",
+                    nav_button_next: "absolute right-0",
+                    table: "w-full border-collapse",
+                    head_row: "flex",
+                    head_cell: "text-muted-foreground w-7 font-normal text-[0.65rem]",
+                    row: "flex w-full mt-1",
+                    cell: "h-7 w-7 text-center text-xs p-0 relative",
+                    day: "h-7 w-7 p-0 font-normal hover:bg-accent rounded-sm",
+                    day_selected: "bg-primary text-primary-foreground hover:bg-primary",
+                    day_today: "bg-accent text-accent-foreground",
+                    day_outside: "text-muted-foreground opacity-50",
+                  }}
+                />
+              </div>
+              <Input
+                type="time"
+                value={localFromTime}
+                onChange={(e) => setLocalFromTime(e.target.value)}
+                className="h-7 text-xs"
+              />
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-xs font-medium">End</label>
+              <div className="border rounded-md overflow-hidden">
+                <Calendar
+                  mode="single"
+                  selected={localToDate}
+                  onSelect={(date) => date && setLocalToDate(date)}
+                  className="p-2"
+                  classNames={{
+                    months: "flex flex-col",
+                    month: "space-y-2",
+                    caption: "flex justify-center relative items-center px-1",
+                    caption_label: "text-xs font-medium",
+                    nav: "space-x-1 flex items-center",
+                    nav_button: "h-6 w-6 bg-transparent p-0 opacity-50 hover:opacity-100",
+                    nav_button_previous: "absolute left-0",
+                    nav_button_next: "absolute right-0",
+                    table: "w-full border-collapse",
+                    head_row: "flex",
+                    head_cell: "text-muted-foreground w-7 font-normal text-[0.65rem]",
+                    row: "flex w-full mt-1",
+                    cell: "h-7 w-7 text-center text-xs p-0 relative",
+                    day: "h-7 w-7 p-0 font-normal hover:bg-accent rounded-sm",
+                    day_selected: "bg-primary text-primary-foreground hover:bg-primary",
+                    day_today: "bg-accent text-accent-foreground",
+                    day_outside: "text-muted-foreground opacity-50",
+                  }}
+                />
+              </div>
+              <Input
+                type="time"
+                value={localToTime}
+                onChange={(e) => setLocalToTime(e.target.value)}
+                className="h-7 text-xs"
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 mt-3 pt-3 border-t">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setIsCustomPopoverOpen(false)
+                setTimeRange("24h")
+              }}
+            >
+              Cancel
+            </Button>
+            <Button size="sm" onClick={handleCustomDateChange}>
+              Apply
+            </Button>
+          </div>
+        </PopoverContent>
+      </Popover>
     </div>
   )
 }

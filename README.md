@@ -720,3 +720,136 @@ Quick reference for important files:
 ## Contact
 
 [To be specified]
+
+
+
+# 카메라 감시 영역을 지정할 수 있는 설정 컴포넌트 생성.
+-  컴포넌트 이름: CameraAreaSelector
+-  주요 기능:
+   - 사용자가 비디오 스트림 위에 감시 영역(사각형)을 드래그 앤 드롭으로 지정할 수 있음.
+   - 지정된 영역의 좌표(x, y, width, height)를 zustand 전역 상태 관리. localStorage에 저장하여 새로고침 후에도 유지.
+   - 영역을 추가/수정/삭제할 수 있는 기능 포함.
+- 상태 관리:
+   - zustand를 사용하여 지정된 감시 영역의 좌표를 전역 상태로 관리.
+   - 상태 구조 예시:
+     ```typescript
+     interface CameraArea {
+       nickname: string;
+      box: AreaBox[]; // 다수의 사각형으로 영역 지정 가능
+
+     }
+     interface AreaBox {
+       x1: number;
+       y1: number;
+       x2: number;
+       y2: number;
+     }
+
+     interface CameraAreaState {
+       areas: CameraArea[];
+       addArea: (area: CameraArea) => void;
+       updateArea: (index: number, area: CameraArea) => void;
+       removeArea: (index: number) => void;
+     }
+     ```
+
+1. you don't need to add white background on label on the box. i need only box with border, center nickname label without white background.
+2. make sure the box is resizable, draggable, removable(with top-right corner, place small, circular X button) within the video container boundaries.
+3. for the the the list of added camera areas, make each item collapsible/expandable to show/hide the box on the video stream. and the list should be scrollable if overflowed.
+4. add enabled field for CameraArea interface. When disabled, the area box should appear with dashed border and semi-transparent. user can still edit/move/resize the box even when disabled. user can toggle enabled/disabled state from the list.
+
+
+1. use switch component from shadcn/ui for enabled/disabled toggle in the list.
+2. let area list be scrollable with fiexed height.
+
+
+[creating StayRate card component with shadcn/ui]
+1. description
+- it takes heatmap data(from the api), and cameraArea list(from zustand state) as props.
+- and claculate the number of detected persons within each defined camera area over a specified time range.
+- rate each of camera area. then show the rank of camera areas based on the number of hits detected.
+- display the rank in descending order (highest hits first).
+  - for example, given time range, there are 5hits, 2 hits detected within area A and 3 hits within area B, 1 hit within area C
+- then each of sumation of hits within camera areas should be calculated and ranked.
+  - for example, area A -> 2hits + 5 hits = 7 hits(rank 1), area B -> 3 hits(rank 2), area C -> 1 hit(rank 3)\
+  - so the display should be like:
+    1위 | Area A
+    2위 | Area B
+    3위 | Area C
+2. ui
+  - place at the right side of the video container, above the DevMan component.
+  - place time range selector at the top of the card.(you can reuse existing TimeRangeSelector component)
+- below the time range selector, show the ranked list of camera areas with their hit counts.
+
+3. features
+- when time range is changed, recalculate the hits within each camera area and update the ranking accordingly.
+
+4. styling
+- make the card visually consistent with other shadcn/ui components in the dashboard.
+
+5. etc
+- feel free to ask if you have any questions regarding the requirements before implementation. 
+
+
+
+
+[make TimeRangeSelector component smaller, versatile to be used in various places]
+- ToggleGroup component is too thick, make it smaller in height.
+- when the toggleGroup 'custom' is selected, show date picker and time picker inline, not in vertical stack without extra spaces, not ruinning external ui.
+  
+i was wrong. even if the custom range picker is inline, it still ruins the external ui because of its height.
+- so...show the custom date/time picker in a popover(not modal that not taking entire page!) when the 'custom' toggle is selected.
+
+1. why popover is so big? you use dialog.tsx as base? i modified dialog.tsx directly to use camera-area selector. that's why it's big.
+- make sure the popover is not too big,(create custom dialog.tsx or, create popover.tsx) just enough to contain date picker and time picker.
+
+2. if user select custom range, then open the popover with date/time picker. when user select start/end datetime and click 'apply' button, show the custom range to TimeRangeSelector
+
+
+custom date/time picker is not working/states seems not working. fix it.
+
+[place TimeRangeSelector to navigation bar]
+- reason: it seems TimeRangeSelector is applied to various place with same purpose, same target.
+- so i'm going to place it to on the right side of top navigation bar, and manage its state w/ zustand store.
+
+- components that is affected by this refactoring:
+  - /dashboard
+    - stream-viewer
+    - StarRate
+    - usageHistory
+  - /usage
+    - histogram
+    - heatmap
+
+feel free to ask something unclear before get started.
+
+1. global.
+2. Header.
+3. last 24hours.
+4. hide when it is not used.
+5. yes, StayRate.
+6. use existing store.
+
+[adding features: stream-viewer.tsx] 
+- change toggle group value as following and act like checkbox.
+  -[보기]: [ 영상 / 히트맵 / 감시영역 ]
+
+- once user 감시영역 checked on, overlay boxse as managed by CameraArea states.
+- box styles drawn by CameraArea states is almost identical with 'camera-area-selector'
+- but in stream-viewer, unlike 'camera-area-selector' component, resize, remove, move...any modification is prohibited, 
+- resize handle, remove button is hidden or removed in stream-viewer.
+
+
+0. stream-viewer viewmode , opacity localstorage 상태 저장
+1. time selector horizontal, 시작: {} \ㅜ 종료 : {} 로 재배치, 항목은 1h,6h, 24h,7d, 30d
+2. stay-rate, detection-service/main.py 업로드할 때의 좌표계, heatmap 표시 좌표계, CameraBox 좌표계, stay-rate 컴포넌트에서 CameraBox와 heatmap 비교시의 좌표계
+3. usage history 제대로 표시되게, usage 메뉴에서는 항목별로 히스토그램 n개 작성, x축 범위, tick은  time selector state에 따라 다음과 같이 tick 설정
+  - 1h : 10min
+  - 6h : 1h
+  - 24h : 1h
+  - 7d : 1d
+  - 30d : 1d
+
+4. stay-rate에 각 감시 영역이 가진 고유 색 표현
+5. camera-area-selector 각 감시 영역별로 색 설정할 수 있도록 하기
+6. /device-management의 advanced / plc 연결 설정을 /setting로 이동

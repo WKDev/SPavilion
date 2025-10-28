@@ -1,18 +1,28 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { TimeRangeSelector } from "@/components/usage/time-range-selector"
 import { Histogram } from "@/components/usage/histogram"
 import { api, type HistogramData } from "@/lib/api"
+import { useStore } from "@/lib/store"
 
 export function UsageHist() {
   const [data, setData] = useState<HistogramData[]>([])
   const [loading, setLoading] = useState(true)
-  const [timeRange, setTimeRange] = useState({
-    from: new Date(Date.now() - 24 * 60 * 60 * 1000),
-    to: new Date(),
-  })
+  const timeRangeState = useStore((state) => state.timeRange)
+
+  // Convert global time range state to { from, to } format with useMemo
+  const timeRange = useMemo(() => {
+    const fromDate = new Date(timeRangeState.fromDate)
+    const [fromHour, fromMinute] = timeRangeState.fromTime.split(":").map(Number)
+    fromDate.setHours(fromHour, fromMinute, 0, 0)
+
+    const toDate = new Date(timeRangeState.toDate)
+    const [toHour, toMinute] = timeRangeState.toTime.split(":").map(Number)
+    toDate.setHours(toHour, toMinute, 59, 999)
+
+    return { from: fromDate, to: toDate }
+  }, [timeRangeState.fromDate, timeRangeState.toDate, timeRangeState.fromTime, timeRangeState.toTime])
 
   useEffect(() => {
     const fetchData = async () => {
@@ -30,16 +40,11 @@ export function UsageHist() {
     fetchData()
   }, [timeRange])
 
-  const handleRangeChange = (from: Date, to: Date) => {
-    setTimeRange({ from, to })
-  }
-
   return (
     <Card className="h-[400px]">
       <CardHeader>
         <div className="flex flex-wrap items-center justify-between gap-4">
           <CardTitle>Usage History</CardTitle>
-          <TimeRangeSelector onRangeChange={handleRangeChange} />
         </div>
       </CardHeader>
       <CardContent>

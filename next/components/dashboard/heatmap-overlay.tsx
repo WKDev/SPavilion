@@ -10,16 +10,18 @@ interface HeatmapOverlayProps {
   canvasRef: React.RefObject<HTMLCanvasElement>
   isOverlay: boolean
   isConnected: boolean
+  timeRange?: { from: Date; to: Date }
+  opacity?: number // 0-1 scale
 }
 
-export function HeatmapOverlay({ canvasRef, isOverlay, isConnected }: HeatmapOverlayProps) {
+export function HeatmapOverlay({ canvasRef, isOverlay, isConnected, timeRange, opacity }: HeatmapOverlayProps) {
   const [heatmapData, setHeatmapData] = useState<HeatmapData[]>([])
 
   // Fetch heatmap data
   useEffect(() => {
     const fetchHeatmap = async () => {
       try {
-        const data = await api.getHeatmap()
+        const data = await api.getHeatmap(timeRange)
         setHeatmapData(data)
       } catch (error) {
         console.error("[v0] Failed to fetch heatmap data:", error)
@@ -31,7 +33,7 @@ export function HeatmapOverlay({ canvasRef, isOverlay, isConnected }: HeatmapOve
     const interval = setInterval(fetchHeatmap, 5000)
 
     return () => clearInterval(interval)
-  }, [])
+  }, [timeRange])
 
   return (
     <div
@@ -45,7 +47,7 @@ export function HeatmapOverlay({ canvasRef, isOverlay, isConnected }: HeatmapOve
           <p className="text-sm text-muted-foreground">Loading heatmap data...</p>
         </div>
       ) : (
-        <HeatmapVisualization data={heatmapData} mode="overlay" />
+        <HeatmapVisualization data={heatmapData} mode="overlay" opacity={opacity} />
       )}
     </div>
   )

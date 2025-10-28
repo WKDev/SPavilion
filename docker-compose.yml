@@ -156,28 +156,7 @@ services:
       - s-pavilion-network
     restart: unless-stopped
     profiles:
-      - with-nginx  # Only start with: docker-compose --profile with-nginx up
-
-  # next Development Server (Development Only)
-  next-dev:
-    image: node:22-alpine
-    container_name: next-dev
-    working_dir: /app
-    ports:
-      - "3001:3001"
-    volumes:
-      - ./next:/app  # Mount next folder for live development
-      - /app/node_modules  # Anonymous volume for node_modules
-
-    environment:
-      - WEBRTC_URL=http://localhost:8889
-    networks:
-      - s-pavilion-network
-    profiles:
-      - development  # Only start with: docker-compose --profile development up
-      - mock
-    restart: unless-stopped
-    command: sh -c "yarn install && yarn dev -p 3001 -H 0.0.0.0"
+      - with-nginx
 
   # Mock Modbus Server (Mock Environment Only)
   mock-modbus:
@@ -204,3 +183,4 @@ volumes:
 networks:
   s-pavilion-network:
     driver: bridge
+

@@ -8,11 +8,15 @@ interface HeatmapVisualizationProps {
   data: HeatmapData[]
   mode: "overlay" | "standalone"
   className?: string
+  opacity?: number // 0-1 scale, default 0.6 for overlay, 0.8 for standalone
 }
 
-export function HeatmapVisualization({ data, mode, className = "" }: HeatmapVisualizationProps) {
+export function HeatmapVisualization({ data, mode, className = "", opacity }: HeatmapVisualizationProps) {
   const svgRef = useRef<SVGSVGElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+
+  // Default opacity: 0.6 for overlay, 0.8 for standalone
+  const effectiveOpacity = opacity ?? (mode === "overlay" ? 0.6 : 0.8)
 
   useEffect(() => {
     if (!svgRef.current || !containerRef.current) return
@@ -27,7 +31,7 @@ export function HeatmapVisualization({ data, mode, className = "" }: HeatmapVisu
     // Mode-specific margins
     const margin = mode === "overlay"
       ? { top: 0, right: 0, bottom: 0, left: 0 }
-      : { top: 20, right: 30, bottom: 40, left: 50 }
+      : { top: 60, right: 80, bottom: 20, left: 20 }
 
     // Get container dimensions with fallback
     const containerWidth = container.clientWidth || 800
@@ -46,8 +50,9 @@ export function HeatmapVisualization({ data, mode, className = "" }: HeatmapVisu
     const width = VIDEO_WIDTH * scale
     const height = VIDEO_HEIGHT * scale
 
-    // Clear previous chart
+    // Clear previous chart and tooltips
     d3.select(svgRef.current).selectAll("*").remove()
+    d3.select(container).selectAll(".heatmap-tooltip").remove()
 
     // Create SVG
     const svg = d3
@@ -70,7 +75,17 @@ export function HeatmapVisualization({ data, mode, className = "" }: HeatmapVisu
       gridMap.set(key, (gridMap.get(key) || 0) + d.value)
     })
 
-    // Calculate max value for color scale
+    // Generate complete grid data (all cells including zeros)
+    const completeGridData: Array<[string, number]> = []
+    for (let row = 0; row < gridRows; row++) {
+      for (let col = 0; col < gridCols; col++) {
+        const key = `${col},${row}`
+        const value = gridMap.get(key) || 0
+        completeGridData.push([key, value])
+      }
+    }
+
+    // Calculate max value for color scale (excluding zeros)
     const maxValue = d3.max(Array.from(gridMap.values())) || 1
 
     // Color scale
@@ -80,12 +95,25 @@ export function HeatmapVisualization({ data, mode, className = "" }: HeatmapVisu
     const cellWidth = CELL_SIZE * scale
     const cellHeight = CELL_SIZE * scale
 
-    // Render grid cells
+    // Add border outline for the entire heatmap area
+    svg
+      .append("rect")
+      .attr("x", 0)
+      .attr("y", 0)
+      .attr("width", width)
+      .attr("height", height)
+      .attr("fill", "none")
+      .attr("stroke", "#9ca3af") // gray-400
+      .attr("stroke-width", 2)
+      .style("pointer-events", "none")
+
+    // Render grid cells (all 60×33 cells, including zeros)
     const cells = svg
-      .selectAll("rect")
-      .data(Array.from(gridMap.entries()))
+      .selectAll("rect.heatmap-cell")
+      .data(completeGridData)
       .enter()
       .append("rect")
+      .attr("class", "heatmap-cell")
       .attr("x", (d) => {
         const [gridX] = d[0].split(',').map(Number)
         return gridX * cellWidth
@@ -96,69 +124,103 @@ export function HeatmapVisualization({ data, mode, className = "" }: HeatmapVisu
       })
       .attr("width", cellWidth)
       .attr("height", cellHeight)
-      .attr("fill", (d) => color(d[1]))
-      .attr("stroke", mode === "overlay" ? "none" : "white")
+      .attr("fill", (d) => d[1] === 0 ? "transparent" : color(d[1]))
+      .attr("stroke", mode === "overlay" ? "none" : (d) => d[1] === 0 ? "none" : "white")
       .attr("stroke-width", mode === "overlay" ? 0 : 0.5)
       .attr("rx", mode === "overlay" ? 0 : 1)
       .style("opacity", (d) => {
         if (d[1] === 0) return 0
-        return mode === "overlay" ? 0.6 : 0.8
+        return effectiveOpacity
       })
+      .style("cursor", "pointer")
 
-    // Tooltips
+    // Create tooltip div
+    const tooltip = d3
+      .select(container)
+      .append("div")
+      .attr("class", "heatmap-tooltip")
+      .style("position", "absolute")
+      .style("visibility", "hidden")
+      .style("background-color", "rgba(0, 0, 0, 0.9)")
+      .style("color", "white")
+      .style("padding", "8px 12px")
+      .style("border-radius", "6px")
+      .style("font-size", "12px")
+      .style("font-weight", "500")
+      .style("pointer-events", "none")
+      .style("z-index", "1000")
+      .style("white-space", "nowrap")
+      .style("box-shadow", "0 2px 8px rgba(0,0,0,0.3)")
+
+    // Add hover interactions
     cells
-      .append("title")
-      .text((d) => {
+      .on("mouseenter", function (_event, d) {
         const [gridX, gridY] = d[0].split(',').map(Number)
         const pixelX = gridX * CELL_SIZE
         const pixelY = gridY * CELL_SIZE
-        return `Grid: (${gridX}, ${gridY})\nPixel: (${pixelX}, ${pixelY})\nHits: ${d[1]}`
+
+        // Highlight the cell
+        d3.select(this)
+          .attr("stroke", mode === "overlay" ? "#3b82f6" : "#3b82f6") // blue-500
+          .attr("stroke-width", 2)
+
+        // Show tooltip
+        tooltip
+          .style("visibility", "visible")
+          .html(`
+            <div style="line-height: 1.5;">
+              <div><strong>Grid:</strong> (${gridX}, ${gridY})</div>
+              <div><strong>Pixel:</strong> (${pixelX}, ${pixelY})</div>
+              <div><strong>Hits:</strong> ${d[1]}</div>
+            </div>
+          `)
+      })
+      .on("mousemove", function (event) {
+        tooltip
+          .style("top", (event.pageY - 10) + "px")
+          .style("left", (event.pageX + 10) + "px")
+      })
+      .on("mouseleave", function () {
+        // Remove highlight
+        d3.select(this)
+          .attr("stroke", mode === "overlay" ? "none" : "white")
+          .attr("stroke-width", mode === "overlay" ? 0 : 0.5)
+
+        // Hide tooltip
+        tooltip.style("visibility", "hidden")
       })
 
-    // Standalone mode: Add axes, legend, and stats
+    // Add cell value labels in standalone mode (only for cells with hits > 0)
+    if (mode === "standalone" && cellWidth >= 20 && cellHeight >= 20) {
+      svg
+        .selectAll("text.cell-value")
+        .data(completeGridData.filter(d => d[1] > 0))
+        .enter()
+        .append("text")
+        .attr("class", "cell-value")
+        .attr("x", (d) => {
+          const [gridX] = d[0].split(',').map(Number)
+          return gridX * cellWidth + cellWidth / 2
+        })
+        .attr("y", (d) => {
+          const [, gridY] = d[0].split(',').map(Number)
+          return gridY * cellHeight + cellHeight / 2
+        })
+        .attr("text-anchor", "middle")
+        .attr("dominant-baseline", "middle")
+        .text((d) => d[1])
+        .style("font-size", `${Math.min(cellWidth, cellHeight) * 0.4}px`)
+        .style("font-weight", "600")
+        .attr("fill", (d) => {
+          // Use white text for dark cells, black for light cells
+          const luminance = d3.hsl(color(d[1])).l
+          return luminance > 0.6 ? "black" : "white"
+        })
+        .style("pointer-events", "none")
+    }
+
+    // Standalone mode: Add legend and stats
     if (mode === "standalone") {
-      // X axis (FHD pixel coordinates)
-      const xScale = d3.scaleLinear()
-        .domain([0, VIDEO_WIDTH])
-        .range([0, width])
-
-      svg
-        .append("g")
-        .attr("transform", `translate(0,${height})`)
-        .call(d3.axisBottom(xScale).ticks(10))
-        .selectAll("text")
-        .style("font-size", "12px")
-
-      // Y axis (FHD pixel coordinates)
-      const yScale = d3.scaleLinear()
-        .domain([VIDEO_HEIGHT, 0])
-        .range([height, 0])
-
-      svg
-        .append("g")
-        .call(d3.axisLeft(yScale).ticks(10))
-        .selectAll("text")
-        .style("font-size", "12px")
-
-      // Axis labels
-      svg
-        .append("text")
-        .attr("x", width / 2)
-        .attr("y", height + margin.bottom - 5)
-        .style("text-anchor", "middle")
-        .text("X Position (FHD pixels)")
-        .attr("fill", "currentColor")
-        .style("font-size", "14px")
-
-      svg
-        .append("text")
-        .attr("transform", "rotate(-90)")
-        .attr("y", 0 - margin.left + 15)
-        .attr("x", 0 - height / 2)
-        .style("text-anchor", "middle")
-        .text("Y Position (FHD pixels)")
-        .attr("fill", "currentColor")
-        .style("font-size", "14px")
 
       // Color legend
       const legendWidth = 20
@@ -168,7 +230,7 @@ export function HeatmapVisualization({ data, mode, className = "" }: HeatmapVisu
         .domain([0, maxValue])
         .range([legendHeight, 0])
 
-      const legend = svg.append("g").attr("transform", `translate(${width + 10}, 20)`)
+      const legend = svg.append("g").attr("transform", `translate(${width + 10}, ${height / 2 - legendHeight / 2})`)
 
       // Gradient
       const defs = svg.append("defs")
@@ -201,49 +263,26 @@ export function HeatmapVisualization({ data, mode, className = "" }: HeatmapVisu
         .style("font-size", "12px")
         .attr("fill", "currentColor")
 
-      // Statistics info
-      const stats = svg.append("g").attr("transform", `translate(10, 20)`)
+      // Statistics info - positioned at top
+      const stats = svg.append("g").attr("transform", `translate(10, -40)`)
+
+      const statsText = [
+        `FHD: ${VIDEO_WIDTH}×${VIDEO_HEIGHT} | Grid: ${gridCols}×${gridRows} | Cell: ${CELL_SIZE}px | Total: ${data.reduce((sum, d) => sum + d.value, 0)} | Max: ${maxValue}`
+      ]
 
       stats
         .append("text")
-        .text(`FHD Resolution: ${VIDEO_WIDTH} × ${VIDEO_HEIGHT}`)
-        .style("font-size", "12px")
-        .attr("fill", "currentColor")
-
-      stats
-        .append("text")
-        .attr("y", 15)
-        .text(`Grid Size: ${gridCols} × ${gridRows}`)
-        .style("font-size", "12px")
-        .attr("fill", "currentColor")
-
-      stats
-        .append("text")
-        .attr("y", 30)
-        .text(`Cell Size: ${CELL_SIZE}px`)
-        .style("font-size", "12px")
-        .attr("fill", "currentColor")
-
-      stats
-        .append("text")
-        .attr("y", 45)
-        .text(`Total Hits: ${data.reduce((sum, d) => sum + d.value, 0)}`)
-        .style("font-size", "12px")
-        .attr("fill", "currentColor")
-
-      stats
-        .append("text")
-        .attr("y", 60)
-        .text(`Max Hits: ${maxValue}`)
-        .style("font-size", "12px")
+        .text(statsText[0])
+        .style("font-size", "13px")
+        .style("font-weight", "500")
         .attr("fill", "currentColor")
     }
-  }, [data, mode])
+  }, [data, mode, effectiveOpacity])
 
   return (
     <div
       ref={containerRef}
-      className={`w-full ${mode === "overlay" ? "h-full" : ""} ${className}`}
+      className={`w-full ${mode === "overlay" ? "h-full" : "min-h-[700px]"} ${className}`}
     >
       <svg ref={svgRef} className="w-full" />
     </div>

@@ -1,23 +1,33 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
-import { TimeRangeSelector } from "@/components/usage/time-range-selector"
 import { Histogram } from "@/components/usage/histogram"
 import { api, type HistogramData, type HeatmapData } from "@/lib/api"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { HeatmapChart } from "@/components/usage/heatmap-chart"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
+import { useStore } from "@/lib/store"
 
 export default function UsagePage() {
   const [histogramData, setHistogramData] = useState<HistogramData[]>([])
   const [heatmapData, setHeatmapData] = useState<HeatmapData[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedDevices, setSelectedDevices] = useState<string[]>(["heat", "fan", "btsp"])
-  const [timeRange, setTimeRange] = useState({
-    from: new Date(Date.now() - 24 * 60 * 60 * 1000),
-    to: new Date(),
-  })
+  const timeRangeState = useStore((state) => state.timeRange)
+
+  // Convert global time range state to { from, to } format with useMemo
+  const timeRange = useMemo(() => {
+    const fromDate = new Date(timeRangeState.fromDate)
+    const [fromHour, fromMinute] = timeRangeState.fromTime.split(":").map(Number)
+    fromDate.setHours(fromHour, fromMinute, 0, 0)
+
+    const toDate = new Date(timeRangeState.toDate)
+    const [toHour, toMinute] = timeRangeState.toTime.split(":").map(Number)
+    toDate.setHours(toHour, toMinute, 59, 999)
+
+    return { from: fromDate, to: toDate }
+  }, [timeRangeState.fromDate, timeRangeState.toDate, timeRangeState.fromTime, timeRangeState.toTime])
 
   useEffect(() => {
     const fetchData = async () => {
@@ -36,10 +46,6 @@ export default function UsagePage() {
     fetchData()
   }, [timeRange])
 
-  const handleRangeChange = (from: Date, to: Date) => {
-    setTimeRange({ from, to })
-  }
-
   const filteredHistogramData = histogramData.filter((item) => selectedDevices.includes(item.device))
 
   return (
@@ -49,14 +55,6 @@ export default function UsagePage() {
         <p className="text-muted-foreground">View device usage history and analytics</p>
       </div>
 
-      <Card>
-        <CardHeader>
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="text-sm font-medium">Time Range</div>
-            <TimeRangeSelector onRangeChange={handleRangeChange} />
-          </div>
-        </CardHeader>
-      </Card>
 
       <Tabs defaultValue="histogram" className="w-full">
         <TabsList>
