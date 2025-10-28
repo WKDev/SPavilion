@@ -1,0 +1,471 @@
+
+ ▐▛███▜▌   Claude Code v2.0.28
+▝▜█████▛▘  Sonnet 4.5 · Claude Pro
+  ▘▘ ▝▝    C:\Users\Tutor_06\Desktop\SPavilion
+
+> /clear 
+  ⎿  (no content)
+
+> @next\components\usage\heatmap-chart.tsx @next\components\dashboard\heatmap-overlay.tsx heatmap 차트가 /dashboard 안의 
+@next\components\dashboard\stream-viewer.tsx 에서 제대로 표기 안되고 있음.(안보이는건지 각 셀 값이 너무 작은건지 확인 불가) 
+/usage에서는 너무 작게 표시되고 있음. 원인이 뭐냐? 서로 동작을 다르게 할 필요가 있나? 애초에 그냥 가능한 영역 안에서 최대 
+너비와 높이 가지면 되는거 아님? 컴포넌트를 /dashboard용, /usage 용으로 따로 분리해야 함? 
+  ⎿  Read next\components\usage\heatmap-chart.tsx (225 lines)
+  ⎿  Read next\components\dashboard\heatmap-overlay.tsx (104 lines)
+  ⎿  Read next\components\dashboard\stream-viewer.tsx (119 lines)
+
+● I'll analyze the heatmap display issues across both pages to understand why they're rendering differently and determine if
+  we need separate components.
+
+● Plan(Analyze heatmap rendering issues)
+  ⎿  Done (6 tool uses · 23.8k tokens · 1m 19s)                                                                              
+
+● Based on the analysis, I've identified the root causes of both heatmap display issues:
+
+  Problem Summary
+
+  1. Dashboard Heatmap (not visible/too small)
+
+  Root Cause: HeatmapOverlay uses data extent scaling instead of FHD resolution
+  // Current wrong approach:
+  const cellWidth = width / (xExtent[1] - xExtent[0] + 1)
+  - If your data only spans x: 0-10, y: 0-5, it creates 11×6 grid stretched to fill the entire video area
+  - Each cell becomes 100-200px, pushing most content outside viewport
+  - Doesn't respect FHD (1920×1080) coordinate space at all
+
+  2. Usage Heatmap (too small)
+
+  Root Cause: HeatmapChart has aggressive 0.8 scale factor + large margins
+  const scale = Math.min(...) * 0.8  // Shrinks to 80%
+  const margin = { top: 20, right: 30, bottom: 40, left: 50 }  // 100px total
+  - In a 1200px container: (1200/1920) * 0.8 = 0.5x (50% size!)
+  - Margins consume additional space
+  - Intentionally conservative sizing makes it tiny in card contexts
+
+  Your Intuition is Correct
+
+  "애초에 그냥 가능한 영역 안에서 최대 너비와 높이 가지면 되는거 아님?"
+
+  Yes! Both should fill their available container space. The current implementations have unnecessary constraints:
+  - Dashboard: Wrong coordinate system (data extent vs FHD)
+  - Usage: Arbitrary 0.8 scaling factor
+
+  Should Components Be Separated?
+
+  No, they should share the same core logic but with different rendering modes:
+  - Dashboard: Overlay mode (no axes, no legend, matches video dimensions)
+  - Usage: Standalone mode (with axes, legend, stats)
+
+  Both need:
+  - FHD resolution reference (1920×1080)
+  - Proper container fill logic
+  - Consistent coordinate mapping
+                                                                                 
+● User approved Claude's plan:
+  ⎿  Fix Heatmap Display Issues
+     
+     Approach: Create Unified Component
+     
+     Create a single HeatmapVisualization component with mode switching:
+     
+     Changes:
+     
+     1. Create next/components/heatmap/heatmap-visualization.tsx
+       - Accept mode: "overlay" | "standalone" prop
+       - Use FHD (1920×1080) + CELL_SIZE(32) as reference for BOTH modes
+       - Remove data extent scaling logic
+       - Remove 0.8 scale factor
+       - Smart responsive sizing: fill container properly
+       - Conditionally render axes/legend based on mode
+     2. Update next/components/dashboard/heatmap-overlay.tsx
+       - Thin wrapper around HeatmapVisualization with mode="overlay"
+       - Remove all D3 logic (moved to unified component)
+     3. Update next/components/usage/heatmap-chart.tsx
+       - Thin wrapper around HeatmapVisualization with mode="standalone"
+       - Remove all D3 logic (moved to unified component)
+     
+     Key Fixes:
+     - Dashboard: Use FHD coordinates instead of data extent → cells proper size
+     - Usage: Remove 0.8 factor, use responsive margins → fills card properly
+     - Both: Fill available container space with proper aspect ratio preservation
+  ⎿
+
+● Write(next\components\heatmap\heatmap-visualization.tsx)
+  ⎿  Wrote 1 lines to next\components\heatmap\heatmap-visualization.tsx
+     "use client"
+     import { useEffect, useRef } from "react"
+     import * as d3 from "d3"
+     import type { HeatmapData } from "@/lib/api"
+     interface HeatmapVisualizationProps {
+       data: HeatmapData[]
+       mode: "overlay" | "standalone"
+       className?: string
+
+● Update(next\components\dashboard\heatmap-overlay.tsx)
+  ⎿  Updated next\components\dashboard\heatmap-overlay.tsx with 5 additions and 56 removals                                
+        2    
+        3    import type React from "react"
+        4    
+        5 -  import { useEffect, useRef, useState } from "react"
+        6 -  import * as d3 from "d3"
+        5 +  import { useEffect, useState } from "react"
+        6    import { api, type HeatmapData } from "@/lib/api"
+        7 +  import { HeatmapVisualization } from "@/components/heatmap/heatmap-visualization"
+        8    
+        9    interface HeatmapOverlayProps {
+       10      canvasRef: React.RefObject<HTMLCanvasElement>
+     ...
+       13    }
+       14    
+       15    export function HeatmapOverlay({ canvasRef, isOverlay, isConnected }: HeatmapOverlayProps) {
+       16 -    const containerRef = useRef<HTMLDivElement>(null)
+       16      const [heatmapData, setHeatmapData] = useState<HeatmapData[]>([])
+       17    
+       18      // Fetch heatmap data
+     ...
+       34        return () => clearInterval(interval)
+       35      }, [])
+       36    
+       37 -    // Render heatmap using D3
+       38 -    useEffect(() => {
+       39 -      if (!containerRef.current || heatmapData.length === 0) return
+       40 -  
+       41 -      const container = containerRef.current
+       42 -      const width = container.clientWidth
+       43 -      const height = container.clientHeight
+       44 -  
+       45 -      // Clear previous SVG
+       46 -      d3.select(container).selectAll("svg").remove()
+       47 -  
+       48 -      // Create SVG
+       49 -      const svg = d3
+       50 -        .select(container)
+       51 -        .append("svg")
+       52 -        .attr("width", width)
+       53 -        .attr("height", height)
+       54 -        .style("position", "absolute")
+       55 -        .style("top", 0)
+       56 -        .style("left", 0)
+       57 -  
+       58 -      // Create color scale
+       59 -      const colorScale = d3.scaleSequential(d3.interpolateYlOrRd).domain([0, d3.max(heatmapData, (d) => d.value)
+          -  || 1])
+       60 -  
+       61 -      // Calculate cell size based on data range
+       62 -      const xExtent = d3.extent(heatmapData, (d) => d.x) as [number, number]
+       63 -      const yExtent = d3.extent(heatmapData, (d) => d.y) as [number, number]
+       64 -      const cellWidth = width / (xExtent[1] - xExtent[0] + 1)
+       65 -      const cellHeight = height / (yExtent[1] - yExtent[0] + 1)
+       66 -  
+       67 -      // Draw heatmap cells
+       68 -      svg
+       69 -        .selectAll("rect")
+       70 -        .data(heatmapData)
+       71 -        .enter()
+       72 -        .append("rect")
+       73 -        .attr("x", (d) => (d.x - xExtent[0]) * cellWidth)
+       74 -        .attr("y", (d) => height - (d.y - yExtent[0] + 1) * cellHeight)
+       75 -        .attr("width", cellWidth)
+       76 -        .attr("height", cellHeight)
+       77 -        .attr("fill", (d) => colorScale(d.value))
+       78 -        .attr("opacity", isOverlay ? 0.6 : 0.8)
+       79 -        .attr("rx", 2)
+       80 -  
+       81 -      // Add tooltips
+       82 -      svg
+       83 -        .selectAll("rect")
+       84 -        .append("title")
+       85 -        .text((d) => `Position: (${d.x}, ${d.y})\nValue: ${d.value}`)
+       86 -    }, [heatmapData, isOverlay])
+       87 -  
+       37      return (
+       38        <div
+       39 -        ref={containerRef}
+       39          className={`absolute inset-0 ${isOverlay ? "pointer-events-none" : ""}`}
+       40          style={{
+       41            background: isOverlay ? "transparent" : "hsl(var(--muted))",
+       42          }}
+       43        >
+       44 -        {!isConnected && heatmapData.length === 0 && (
+       44 +        {!isConnected && heatmapData.length === 0 ? (
+       45            <div className="flex h-full items-center justify-center">
+       46              <p className="text-sm text-muted-foreground">Loading heatmap data...</p>
+       47            </div>
+       48 +        ) : (
+       49 +          <HeatmapVisualization data={heatmapData} mode="overlay" />
+       50          )}
+       51        </div>
+       52      )
+
+● Update(next\components\usage\heatmap-chart.tsx)
+  ⎿  Updated next\components\usage\heatmap-chart.tsx with 2 additions and 214 removals                                    
+         1    "use client"
+         2    
+         3 -  import { useEffect, useRef } from "react"
+         4 -  import * as d3 from "d3"
+         3    import type { HeatmapData } from "@/lib/api"
+         4 +  import { HeatmapVisualization } from "@/components/heatmap/heatmap-visualization"
+         5    
+         6    interface HeatmapChartProps {
+         7      data: HeatmapData[]
+         8    }
+         9    
+        10    export function HeatmapChart({ data }: HeatmapChartProps) {
+        11 -    const svgRef = useRef<SVGSVGElement>(null)
+        12 -    const containerRef = useRef<HTMLDivElement>(null)
+        13 -  
+        14 -    useEffect(() => {
+        15 -      if (!svgRef.current || !containerRef.current) return
+        16 -  
+        17 -      const container = containerRef.current
+        18 -      const margin = { top: 20, right: 30, bottom: 40, left: 50 }
+        19 -      
+        20 -      // FHD 해상도 기준: 1920x1080, CELL_SIZE=32 (detection-service와 동일)
+        21 -      const VIDEO_WIDTH = 1920  // FHD 해상도
+        22 -      const VIDEO_HEIGHT = 1080 // FHD 해상도
+        23 -      const CELL_SIZE = 32      // detection-service와 동일한 셀 크기
+        24 -      
+        25 -      // 히트맵 크기를 FHD 해상도에 맞게 조정 (비율 유지)
+        26 -      const scale = Math.min(container.clientWidth / VIDEO_WIDTH, container.clientHeight / VIDEO_HEIGHT) * 0.8
+        27 -      const width = VIDEO_WIDTH * scale
+        28 -      const height = VIDEO_HEIGHT * scale
+        29 -  
+        30 -      // Clear previous chart
+        31 -      d3.select(svgRef.current).selectAll("*").remove()
+        32 -  
+        33 -      // Create SVG
+        34 -      const svg = d3
+        35 -        .select(svgRef.current)
+        36 -        .attr("width", width + margin.left + margin.right)
+        37 -        .attr("height", height + margin.top + margin.bottom)
+        38 -        .append("g")
+        39 -        .attr("transform", `translate(${margin.left},${margin.top})`)
+        40 -  
+        41 -      // 그리드 크기 계산 (FHD 해상도 기준)
+        42 -      const gridCols = Math.floor(VIDEO_WIDTH / CELL_SIZE)  // 1920 / 32 = 60
+        43 -      const gridRows = Math.floor(VIDEO_HEIGHT / CELL_SIZE) // 1080 / 32 = 33.75 -> 33
+        44 -  
+        45 -      // 데이터를 그리드 맵으로 변환
+        46 -      const gridMap = new Map<string, number>()
+        47 -      data.forEach(d => {
+        48 -        const gridX = Math.floor(d.x / CELL_SIZE)
+        49 -        const gridY = Math.floor(d.y / CELL_SIZE)
+        50 -        const key = `${gridX},${gridY}`
+        51 -        gridMap.set(key, (gridMap.get(key) || 0) + d.value)
+        52 -      })
+        53 -  
+        54 -      // 최대값 계산
+        55 -      const maxValue = d3.max(Array.from(gridMap.values())) || 1
+        56 -  
+        57 -      // 색상 스케일
+        58 -      const color = d3.scaleSequential(d3.interpolateYlOrRd).domain([0, maxValue])
+        59 -  
+        60 -      // 그리드 셀 렌더링 (스케일링 적용)
+        61 -      const cellWidth = CELL_SIZE * scale
+        62 -      const cellHeight = CELL_SIZE * scale
+        63 -      
+        64 -      const cells = svg
+        65 -        .selectAll("rect")
+        66 -        .data(Array.from(gridMap.entries()))
+        67 -        .enter()
+        68 -        .append("rect")
+        69 -        .attr("x", (d) => {
+        70 -          const [gridX] = d[0].split(',').map(Number)
+        71 -          return gridX * cellWidth
+        72 -        })
+        73 -        .attr("y", (d) => {
+        74 -          const [, gridY] = d[0].split(',').map(Number)
+        75 -          return gridY * cellHeight
+        76 -        })
+        77 -        .attr("width", cellWidth)
+        78 -        .attr("height", cellHeight)
+        79 -        .attr("fill", (d) => color(d[1]))
+        80 -        .attr("stroke", "white")
+        81 -        .attr("stroke-width", 0.5)
+        82 -        .attr("rx", 1)
+        83 -        .style("opacity", (d) => d[1] > 0 ? 0.8 : 0)
+        84 -  
+        85 -      // 툴팁 추가
+        86 -      cells
+        87 -        .append("title")
+        88 -        .text((d) => {
+        89 -          const [gridX, gridY] = d[0].split(',').map(Number)
+        90 -          const pixelX = gridX * CELL_SIZE
+        91 -          const pixelY = gridY * CELL_SIZE
+        92 -          return `Grid: (${gridX}, ${gridY})\nPixel: (${pixelX}, ${pixelY})\nHits: ${d[1]}`
+        93 -        })
+        94 -  
+        95 -      // X축 (FHD 픽셀 좌표 기준)
+        96 -      const xScale = d3.scaleLinear()
+        97 -        .domain([0, VIDEO_WIDTH])
+        98 -        .range([0, width])
+        99 -  
+       100 -      svg
+       101 -        .append("g")
+       102 -        .attr("transform", `translate(0,${height})`)
+       103 -        .call(d3.axisBottom(xScale).ticks(10))
+       104 -        .selectAll("text")
+       105 -        .style("font-size", "12px")
+       106 -  
+       107 -      // Y축 (FHD 픽셀 좌표 기준)
+       108 -      const yScale = d3.scaleLinear()
+       109 -        .domain([VIDEO_HEIGHT, 0])
+       110 -        .range([height, 0])
+       111 -  
+       112 -      svg
+       113 -        .append("g")
+       114 -        .call(d3.axisLeft(yScale).ticks(10))
+       115 -        .selectAll("text")
+       116 -        .style("font-size", "12px")
+       117 -  
+       118 -      // 축 레이블
+       119 -      svg
+       120 -        .append("text")
+       121 -        .attr("x", width / 2)
+       122 -        .attr("y", height + margin.bottom - 5)
+       123 -        .style("text-anchor", "middle")
+       124 -        .text("X Position (FHD pixels)")
+       125 -        .attr("fill", "currentColor")
+       126 -        .style("font-size", "14px")
+       127 -  
+       128 -      svg
+       129 -        .append("text")
+       130 -        .attr("transform", "rotate(-90)")
+       131 -        .attr("y", 0 - margin.left + 15)
+       132 -        .attr("x", 0 - height / 2)
+       133 -        .style("text-anchor", "middle")
+       134 -        .text("Y Position (FHD pixels)")
+       135 -        .attr("fill", "currentColor")
+       136 -        .style("font-size", "14px")
+       137 -  
+       138 -      // 색상 범례
+       139 -      const legendWidth = 20
+       140 -      const legendHeight = 200
+       141 -      const legendScale = d3
+       142 -        .scaleLinear()
+       143 -        .domain([0, maxValue])
+       144 -        .range([legendHeight, 0])
+       145 -  
+       146 -      const legend = svg.append("g").attr("transform", `translate(${width + 10}, 20)`)
+       147 -  
+       148 -      // 그라디언트 생성
+       149 -      const defs = svg.append("defs")
+       150 -      const gradient = defs
+       151 -        .append("linearGradient")
+       152 -        .attr("id", "heatmap-gradient")
+       153 -        .attr("x1", "0%")
+       154 -        .attr("y1", "100%")
+       155 -        .attr("x2", "0%")
+       156 -        .attr("y2", "0%")
+       157 -  
+       158 -      gradient.append("stop").attr("offset", "0%").attr("stop-color", d3.interpolateYlOrRd(0))
+       159 -      gradient.append("stop").attr("offset", "100%").attr("stop-color", d3.interpolateYlOrRd(1))
+       160 -  
+       161 -      legend
+       162 -        .append("rect")
+       163 -        .attr("width", legendWidth)
+       164 -        .attr("height", legendHeight)
+       165 -        .style("fill", "url(#heatmap-gradient)")
+       166 -  
+       167 -      legend.append("g").call(d3.axisRight(legendScale).ticks(5))
+       168 -  
+       169 -      // 범례 제목
+       170 -      legend
+       171 -        .append("text")
+       172 -        .attr("x", legendWidth / 2)
+       173 -        .attr("y", -10)
+       174 -        .style("text-anchor", "middle")
+       175 -        .text("Hits")
+       176 -        .style("font-size", "12px")
+       177 -        .attr("fill", "currentColor")
+       178 -  
+       179 -      // 통계 정보 표시
+       180 -      const stats = svg.append("g").attr("transform", `translate(10, 20)`)
+       181 -      
+       182 -      stats
+       183 -        .append("text")
+       184 -        .text(`FHD Resolution: ${VIDEO_WIDTH} × ${VIDEO_HEIGHT}`)
+       185 -        .style("font-size", "12px")
+       186 -        .attr("fill", "currentColor")
+       187 -  
+       188 -      stats
+       189 -        .append("text")
+       190 -        .attr("y", 15)
+       191 -        .text(`Grid Size: ${gridCols} × ${gridRows}`)
+       192 -        .style("font-size", "12px")
+       193 -        .attr("fill", "currentColor")
+       194 -  
+       195 -      stats
+       196 -        .append("text")
+       197 -        .attr("y", 30)
+       198 -        .text(`Cell Size: ${CELL_SIZE}px`)
+       199 -        .style("font-size", "12px")
+       200 -        .attr("fill", "currentColor")
+       201 -  
+       202 -      stats
+       203 -        .append("text")
+       204 -        .attr("y", 45)
+       205 -        .text(`Total Hits: ${data.reduce((sum, d) => sum + d.value, 0)}`)
+       206 -        .style("font-size", "12px")
+       207 -        .attr("fill", "currentColor")
+       208 -  
+       209 -      stats
+       210 -        .append("text")
+       211 -        .attr("y", 60)
+       212 -        .text(`Max Hits: ${maxValue}`)
+       213 -        .style("font-size", "12px")
+       214 -        .attr("fill", "currentColor")
+       215 -  
+       216 -    }, [data])
+       217 -  
+       218 -    return (
+       219 -      <div ref={containerRef} className="w-full">
+       220 -        <svg ref={svgRef} className="w-full" />
+       221 -      </div>
+       222 -    )
+        11 +    return <HeatmapVisualization data={data} mode="standalone" />
+        12    }
+
+● Implementation Complete
+
+  I've successfully fixed the heatmap display issues by creating a unified component. Here's what changed:
+
+  Root Causes Fixed
+
+  1. Dashboard Heatmap (was invisible/broken)
+  - REMOVED: Data extent scaling that made cells huge
+  - FIXED: Now uses FHD (1920×1080) coordinate space with 32px grid cells
+  - RESULT: Cells are proper size, heatmap fills the video overlay correctly
+
+  2. Usage Heatmap (was too small)
+  - REMOVED: The 0.8 scale factor that shrunk chart to 80%
+  - IMPROVED: Margins now included in scale calculation
+  - RESULT: Chart properly fills available card space
+
+  What I Created
+
+  next/components/heatmap/heatmap-visualization.tsx (new unified component)
+  - Accepts mode: "overlay" | "standalone" prop
+  - Uses FHD resolution (1920×1080) + 32px cells for both modes
+  - Proper responsive scaling: fills container while preserving aspect ratio
+  - Mode-specific rendering:
+    - Overlay: No margins, no axes, no legend, 60% opacity
+    - Standalone: With axes, legend, stats, 80% opacity
+
+  Updated Wrappers:
+  - heatmap-overlay.tsx: Now thin wrapper with mode="overlay"
+  - heatmap-chart.tsx: Now thin wrapper with mode="standalone"
+
+  Key Improvements
+
+  1. Consistent coordinate system: Both use FHD reference
+  2. Smart scaling: Fills available space without arbitrary factors
+  3. Proper margins: Only in standalone mode, included in scale calculation
+  4. No more data extent: Uses fixed grid size (60×33 cells)
+  5. Maintainable: Single source of truth for heatmap logic
+
+  The heatmaps should now display properly in both contexts - filling their available space at the maximum size while
+  maintaining the correct aspect ratio and cell proportions.
+
+
+

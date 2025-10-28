@@ -167,8 +167,8 @@ export async function getHeatmap(timeRange?: {
   const response = await fetchApi<HeatmapResponse>(endpoint)
 
   // API 응답을 UI 히트맵 포맷으로 변환
-  // gx, gy를 x, y 픽셀 좌표로 변환 (CELL_SIZE = 16 기준)
-  const CELL_SIZE = 16
+  // gx, gy를 x, y 픽셀 좌표로 변환 (CELL_SIZE = 32 기준, FHD 해상도)
+  const CELL_SIZE = 32 // detection-service와 동일
   const heatmapData: HeatmapData[] = response.data.map((point) => ({
     x: point.gx * CELL_SIZE,
     y: point.gy * CELL_SIZE,
@@ -295,3 +295,8 @@ export const api = {
  * Export ApiClientError for error handling
  */
 export { ApiClientError }
+
+/**
+ * Export types for external use
+ */
+export type { HistogramData, HeatmapData }

@@ -94,7 +94,11 @@ export default function UsagePage() {
                   <p className="text-muted-foreground">No histogram data available for selected devices</p>
                 </div>
               ) : (
-                <Histogram data={filteredHistogramData} />
+                <Histogram 
+                  data={filteredHistogramData} 
+                  startDate={timeRange.from} 
+                  endDate={timeRange.to} 
+                />
               )}
             </CardContent>
           </Card>

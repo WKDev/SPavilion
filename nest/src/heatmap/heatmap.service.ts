@@ -18,8 +18,9 @@ export class HeatmapService {
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
   ) {
+    // FHD 해상도 기준: 1920x1080, CELL_SIZE=32
     this.gridSize = this.configService.get('heatmap.gridSize', 50);
-    this.cellSize = this.configService.get('heatmap.cellSize', 100);
+    this.cellSize = this.configService.get('heatmap.cellSize', 32); // detection-service와 동일
   }
 
   async aggregateBoundingBoxes(options: AggregateOptions): Promise<void> {

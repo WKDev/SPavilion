@@ -356,6 +356,8 @@ def init_camera():
                     
                 print(f"Video dimensions: {camera_width}x{camera_height}")
                 print(f"Video FPS: {video_fps}")
+
+                
                 
                 return True
             else:
@@ -485,7 +487,7 @@ def init_ffmpeg_writer():
         return None
 
 
-def send_bbox_to_api(bboxes):
+def send_bbox_to_api(bboxes: list[dict]):
     """Send bounding box data to NestJS backend API"""
     try:
         payload = {
@@ -746,11 +748,11 @@ def main():
                             print(f"Failed to reconnect writer. Continuing without RTSP streaming...")
 
             # Display frame info
-            if frame_count % 30 == 0:  # Print every second (assuming 30fps)
+            if frame_count % (15*10) == 0:  # Print every second (assuming 30fps)
                 print(f"Frame {frame_count}: Streaming to {writer_type if writer else 'No stream'}")
                 
             # Check if we're near the end of video (for debugging)
-            if MOCK_MODE == 'true' and frame_count % 10 == 0:
+            if MOCK_MODE == 'true' and frame_count % (15*10) == 0:
                 total_frames = int(camera.get(cv2.CAP_PROP_FRAME_COUNT))
                 current_frame = int(camera.get(cv2.CAP_PROP_POS_FRAMES))
                 if total_frames > 0:

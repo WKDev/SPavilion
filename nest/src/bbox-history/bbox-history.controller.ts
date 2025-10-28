@@ -66,7 +66,8 @@ export class BboxHistoryController {
       const hourTs = new Date(timestamp);
       hourTs.setMinutes(0, 0, 0);
 
-      const CELL_SIZE = 16; // Grid cell size (configurable)
+      // FHD 해상도 기준: CELL_SIZE=32 (detection-service와 동일)
+      const CELL_SIZE = 32;
 
       // Process each bounding box
       for (const bbox of bboxes) {

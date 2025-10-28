@@ -39,7 +39,7 @@ export function DevMan() {
   }
 
   return (
-    <Card className="h-[400px] flex flex-col">
+    <Card className="h-full flex flex-col">
       <CardHeader>
         <CardTitle>Device Control</CardTitle>
       </CardHeader>

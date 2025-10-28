@@ -52,7 +52,7 @@ export function StreamViewer() {
   }, [])
 
   return (
-    <Card className="flex h-[400px] flex-col gap-4 p-4">
+    <Card className="flex flex-col gap-4 p-4">
       {/* View Mode Toggle */}
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">Camera Stream</h2>
@@ -70,7 +70,7 @@ export function StreamViewer() {
       </div>
 
       {/* Stream Display */}
-      <div className="relative flex-1 overflow-hidden rounded-lg bg-muted">
+      <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-muted">
         {/* Loading State */}
         {isConnecting && (
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/80">

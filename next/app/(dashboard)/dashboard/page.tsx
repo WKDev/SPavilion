@@ -4,18 +4,20 @@ import { UsageHist } from "@/components/dashboard/usage-hist"
 
 export default function DashboardPage() {
   return (
-    <div className="grid h-full grid-cols-10 gap-3">
-      {/* Row 1 */}
-      <div className="col-span-6">
-        <StreamViewer />
-      </div>
-      <div className="col-span-4">
-        <DevMan />
+    <div className="flex h-full flex-row gap-3">
+      {/* Left Column (70%): StreamViewer + UsageHistory */}
+      <div className="flex flex-[7] flex-col gap-3">
+        <div className="flex-[6]">
+          <StreamViewer />
+        </div>
+        <div className="flex-[4]">
+          <UsageHist />
+        </div>
       </div>
 
-      {/* Row 2 */}
-      <div className="col-span-10">
-        <UsageHist />
+      {/* Right Column (30%): DevMan */}
+      <div className="flex-[3]">
+        <DevMan />
       </div>
     </div>
   )

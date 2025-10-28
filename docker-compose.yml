@@ -39,7 +39,7 @@ services:
       MOCK_MODBUS_HOST: mock-modbus
       MOCK_MODBUS_PORT: 502
       # Platform detection
-      PLATFORM: ${PLATFORM:-linux}  # linux or windows
+      PLATFORM: ${PLATFORM:-windows}  # linux or windows
     ports:
       - "3000:3000"
     # Serial port device mapping for both Linux and Windows
