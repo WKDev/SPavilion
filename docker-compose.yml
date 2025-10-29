@@ -25,6 +25,22 @@ services:
       - s-pavilion-network
     restart: unless-stopped
 
+  mock-modbus:
+    build:
+      context: ./mock-modbus
+      dockerfile: Dockerfile
+    container_name: mock-modbus
+    ports:
+      - "502:502"
+    networks:
+      - s-pavilion-network
+    restart: unless-stopped
+    command: python -u main.py
+    volumes:
+      - ./mock-modbus:/app
+    profiles:
+      - mock
+
   nest:
     image: node:22-alpine
     working_dir: /app
@@ -32,14 +48,13 @@ services:
       DATABASE_URL: postgresql://admin:uhBscN4gshrqiwJc@postgres:5432/s_pavilion
       PLC_PORT: /dev/ttyUSB0
       PLC_BAUD_RATE: 9600
+      PLC_SLAVE_ID: 1
       NODE_ENV: development
       TZ: Asia/Seoul
-      # Mock environment variables
-      MOCK_MODE: ${MOCK_MODE:-true}  # Changed default to false for hardware access
-      MOCK_MODBUS_HOST: mock-modbus
-      MOCK_MODBUS_PORT: 502
       # Platform detection
       PLATFORM: ${PLATFORM:-windows}  # linux or windows
+    depends_on:
+      - postgres
     ports:
       - "3000:3000"
     # Serial port device mapping for both Linux and Windows
@@ -49,11 +64,7 @@ services:
       - /dev/ttyACM0:/dev/ttyACM0  # Arduino/other serial devices (Linux)
       - /dev/ttyACM1:/dev/ttyACM1  # Additional Arduino devices (Linux)
     privileged: true  # Required for serial port access
-    depends_on:
-      postgres:
-        condition: service_healthy
-      mock-modbus:
-        condition: service_started
+
     profiles:
       - default
       - hardware  # New profile for hardware access
@@ -108,38 +119,27 @@ services:
       USE_GSTREAMER: ${USE_GSTREAMER:-false}
       USE_DETECTION: ${USE_DETECTION:-true}  # Enable YOLOv8 detection
       MOCK_VIDEO_FILE: /app/test-video.mp4
-      # Platform detection
-      PLATFORM: ${PLATFORM:-linux}  # linux or windows
-      # GPU settings (for NVIDIA GPU)
-      NVIDIA_VISIBLE_DEVICES: ${NVIDIA_VISIBLE_DEVICES:-all}
-      NVIDIA_DRIVER_CAPABILITIES: ${NVIDIA_DRIVER_CAPABILITIES:-compute,utility}
-    # Hardware device mapping for Linux only (Windows doesn't use /dev/video*)
+      PLATFORM: ${PLATFORM:-windows} 
     devices:
-      - /dev/video0:/dev/video0  # UVC camera (Linux only)
-      - /dev/video1:/dev/video1  # Additional camera (Linux only)
-    privileged: true  # Required for camera and serial port access
+      - /dev/video0:/dev/video0
+    privileged: true  
+
+    group_add:
+    - "44"  # video 그룹 (카메라 접근 권한용)
     depends_on:
       - mediamtx
     profiles:
       - default
       - mock
-      - hardware  # New profile for hardware access
+      - hardware
     volumes:
-      - ./detection-service:/app  # Mount detection-service folder for live development
-      - /app/__pycache__  # Anonymous volume for Python cache
-      # GPU access
-      - /dev/dri:/dev/dri  # GPU access for Linux
-      # Windows-specific volumes (will be ignored on Linux) 
-      - /dev/bus/usb:/dev/bus/usb  # USB device access
+      - ./detection-service:/app
+      - /app/__pycache__ 
     networks:
       - s-pavilion-network
     restart: unless-stopped
-    command: python -u main.py  # Use hot reload for development
-    # GPU runtime for NVIDIA GPUs
-    # runtime: nvidia
-    # stop logs
-    logging:
-      driver: none
+    command: python -u main.py 
+
 
   # Nginx Reverse Proxy (Optional)
   nginx:
@@ -157,24 +157,6 @@ services:
     restart: unless-stopped
     profiles:
       - with-nginx
-
-  # Mock Modbus Server (Mock Environment Only)
-  mock-modbus:
-    build:
-      context: ./mock-modbus
-      dockerfile: Dockerfile
-    container_name: mock-modbus
-    ports:
-      - "502:502"  # Modbus TCP port
-    environment:
-      TZ: Asia/Seoul
-    networks:
-      - s-pavilion-network
-    profiles:
-      - mock  # Only start with: docker-compose --profile mock up
-    restart: unless-stopped
-    command: python main.py
-
 
 volumes:
   postgres:

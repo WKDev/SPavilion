@@ -27,6 +27,10 @@ const COLOR_MAP: Record<number, { stroke: string; fill: string; name: string }> 
 type InteractionMode = "none" | "draw" | "move" | "resize"
 type ResizeHandle = "nw" | "ne" | "sw" | "se" | "n" | "e" | "s" | "w"
 
+// Fixed reference resolution (matches heatmap resolution from detection service)
+const REFERENCE_WIDTH = 1920
+const REFERENCE_HEIGHT = 1080
+
 export function CameraAreaSelector() {
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -127,6 +131,30 @@ export function CameraAreaSelector() {
     }
   }
 
+  // Helper functions to convert between reference resolution (1920x1080) and canvas coordinates
+  // All boxes are stored in reference resolution (1920x1080) for consistency with heatmap
+  const referenceToCanvas = (box: AreaBox, canvas: HTMLCanvasElement): AreaBox => {
+    const scaleX = canvas.width / REFERENCE_WIDTH
+    const scaleY = canvas.height / REFERENCE_HEIGHT
+    return {
+      x1: box.x1 * scaleX,
+      y1: box.y1 * scaleY,
+      x2: box.x2 * scaleX,
+      y2: box.y2 * scaleY,
+    }
+  }
+
+  const canvasToReference = (box: AreaBox, canvas: HTMLCanvasElement): AreaBox => {
+    const scaleX = REFERENCE_WIDTH / canvas.width
+    const scaleY = REFERENCE_HEIGHT / canvas.height
+    return {
+      x1: box.x1 * scaleX,
+      y1: box.y1 * scaleY,
+      x2: box.x2 * scaleX,
+      y2: box.y2 * scaleY,
+    }
+  }
+
   // Draw areas on canvas
   useEffect(() => {
     if (!canvasRef.current || !videoRef.current) return
@@ -158,6 +186,9 @@ export function CameraAreaSelector() {
         }
 
         area.box.forEach((box, boxIndex) => {
+          // Convert from reference resolution (1920x1080) to canvas coordinates for display
+          const canvasBox = referenceToCanvas(box, canvas)
+
           const isHovered = hoveredBox?.areaIndex === areaIndex && hoveredBox?.boxIndex === boxIndex
           const isDragging = draggedBox?.areaIndex === areaIndex && draggedBox?.boxIndex === boxIndex
           const isResizing =
@@ -187,16 +218,16 @@ export function CameraAreaSelector() {
             ctx.setLineDash([])
           }
 
-          const width = box.x2 - box.x1
-          const height = box.y2 - box.y1
+          const width = canvasBox.x2 - canvasBox.x1
+          const height = canvasBox.y2 - canvasBox.y1
 
-          ctx.fillRect(box.x1, box.y1, width, height)
-          ctx.strokeRect(box.x1, box.y1, width, height)
+          ctx.fillRect(canvasBox.x1, canvasBox.y1, width, height)
+          ctx.strokeRect(canvasBox.x1, canvasBox.y1, width, height)
           ctx.setLineDash([]) // Reset dash
 
           // Draw area nickname in center without background
-          const centerX = (box.x1 + box.x2) / 2
-          const centerY = (box.y1 + box.y2) / 2
+          const centerX = (canvasBox.x1 + canvasBox.x2) / 2
+          const centerY = (canvasBox.y1 + canvasBox.y2) / 2
 
           ctx.font = "bold 14px sans-serif"
           ctx.textAlign = "center"
@@ -212,8 +243,8 @@ export function CameraAreaSelector() {
 
           // Draw delete button (top-right corner)
           if (isHovered || isDragging) {
-            const btnX = box.x2 - 8
-            const btnY = box.y1 + 8
+            const btnX = canvasBox.x2 - 8
+            const btnY = canvasBox.y1 + 8
             const btnRadius = 8
 
             // Circle background
@@ -238,14 +269,14 @@ export function CameraAreaSelector() {
             const handleSize = 8
             ctx.fillStyle = area.enabled ? "#3b82f6" : "#94a3b8"
             const handles = [
-              { x: box.x1, y: box.y1 },
-              { x: box.x2, y: box.y1 },
-              { x: box.x1, y: box.y2 },
-              { x: box.x2, y: box.y2 },
-              { x: (box.x1 + box.x2) / 2, y: box.y1 },
-              { x: (box.x1 + box.x2) / 2, y: box.y2 },
-              { x: box.x1, y: (box.y1 + box.y2) / 2 },
-              { x: box.x2, y: (box.y1 + box.y2) / 2 },
+              { x: canvasBox.x1, y: canvasBox.y1 },
+              { x: canvasBox.x2, y: canvasBox.y1 },
+              { x: canvasBox.x1, y: canvasBox.y2 },
+              { x: canvasBox.x2, y: canvasBox.y2 },
+              { x: (canvasBox.x1 + canvasBox.x2) / 2, y: canvasBox.y1 },
+              { x: (canvasBox.x1 + canvasBox.x2) / 2, y: canvasBox.y2 },
+              { x: canvasBox.x1, y: (canvasBox.y1 + canvasBox.y2) / 2 },
+              { x: canvasBox.x2, y: (canvasBox.y1 + canvasBox.y2) / 2 },
             ]
             handles.forEach((h) => {
               ctx.fillRect(h.x - handleSize / 2, h.y - handleSize / 2, handleSize, handleSize)
@@ -290,8 +321,9 @@ export function CameraAreaSelector() {
 
       for (let boxIndex = area.box.length - 1; boxIndex >= 0; boxIndex--) {
         const box = area.box[boxIndex]
-        const btnX = box.x2 - 8
-        const btnY = box.y1 + 8
+        const canvasBox = referenceToCanvas(box, canvas)
+        const btnX = canvasBox.x2 - 8
+        const btnY = canvasBox.y1 + 8
         const btnRadius = 8
         const dist = Math.sqrt((x - btnX) ** 2 + (y - btnY) ** 2)
 
@@ -309,7 +341,8 @@ export function CameraAreaSelector() {
 
       for (let boxIndex = area.box.length - 1; boxIndex >= 0; boxIndex--) {
         const box = area.box[boxIndex]
-        const handle = getResizeHandle(x, y, box)
+        const canvasBox = referenceToCanvas(box, canvas)
+        const handle = getResizeHandle(x, y, canvasBox)
         if (handle) {
           setInteractionMode("resize")
           setResizingBox({ areaIndex, boxIndex, handle })
@@ -326,10 +359,11 @@ export function CameraAreaSelector() {
 
       for (let boxIndex = area.box.length - 1; boxIndex >= 0; boxIndex--) {
         const box = area.box[boxIndex]
-        if (isPointInBox(x, y, box)) {
+        const canvasBox = referenceToCanvas(box, canvas)
+        if (isPointInBox(x, y, canvasBox)) {
           setInteractionMode("move")
           setDraggedBox({ areaIndex, boxIndex })
-          setDragOffset({ x: x - box.x1, y: y - box.y1 })
+          setDragOffset({ x: x - canvasBox.x1, y: y - canvasBox.y1 })
           setSelectedAreaIndex(areaIndex)
           return
         }
@@ -359,7 +393,8 @@ export function CameraAreaSelector() {
 
       for (let boxIndex = area.box.length - 1; boxIndex >= 0; boxIndex--) {
         const box = area.box[boxIndex]
-        if (isPointInBox(x, y, box)) {
+        const canvasBox = referenceToCanvas(box, canvas)
+        if (isPointInBox(x, y, canvasBox)) {
           newHoveredBox = { areaIndex, boxIndex }
           break
         }
@@ -377,7 +412,8 @@ export function CameraAreaSelector() {
 
         for (let boxIndex = area.box.length - 1; boxIndex >= 0; boxIndex--) {
           const box = area.box[boxIndex]
-          const handle = getResizeHandle(x, y, box)
+          const canvasBox = referenceToCanvas(box, canvas)
+          const handle = getResizeHandle(x, y, canvasBox)
           if (handle) {
             const cursorMap: Record<ResizeHandle, string> = {
               nw: "nw-resize",
@@ -391,7 +427,7 @@ export function CameraAreaSelector() {
             }
             cursor = cursorMap[handle]
             break
-          } else if (isPointInBox(x, y, box)) {
+          } else if (isPointInBox(x, y, canvasBox)) {
             cursor = "move"
             break
           }
@@ -413,10 +449,11 @@ export function CameraAreaSelector() {
     } else if (interactionMode === "move" && draggedBox && dragOffset) {
       const area = areas[draggedBox.areaIndex]
       const box = area.box[draggedBox.boxIndex]
-      const width = box.x2 - box.x1
-      const height = box.y2 - box.y1
+      const canvasBox = referenceToCanvas(box, canvas)
+      const width = canvasBox.x2 - canvasBox.x1
+      const height = canvasBox.y2 - canvasBox.y1
 
-      const newBox = constrainBox(
+      const newCanvasBox = constrainBox(
         {
           x1: x - dragOffset.x,
           y1: y - dragOffset.y,
@@ -426,32 +463,39 @@ export function CameraAreaSelector() {
         canvas
       )
 
+      // Convert back to reference resolution (1920x1080) before storing
+      const newReferenceBox = canvasToReference(newCanvasBox, canvas)
+
       const updatedBoxes = [...area.box]
-      updatedBoxes[draggedBox.boxIndex] = newBox
+      updatedBoxes[draggedBox.boxIndex] = newReferenceBox
       updateArea(draggedBox.areaIndex, { ...area, box: updatedBoxes })
     } else if (interactionMode === "resize" && resizingBox) {
       const area = areas[resizingBox.areaIndex]
       const box = area.box[resizingBox.boxIndex]
-      let newBox = { ...box }
+      const canvasBox = referenceToCanvas(box, canvas)
+      let newCanvasBox = { ...canvasBox }
 
       const { handle } = resizingBox
-      if (handle.includes("n")) newBox.y1 = y
-      if (handle.includes("s")) newBox.y2 = y
-      if (handle.includes("w")) newBox.x1 = x
-      if (handle.includes("e")) newBox.x2 = x
+      if (handle.includes("n")) newCanvasBox.y1 = y
+      if (handle.includes("s")) newCanvasBox.y2 = y
+      if (handle.includes("w")) newCanvasBox.x1 = x
+      if (handle.includes("e")) newCanvasBox.x2 = x
 
       // Ensure min size and correct order
-      if (newBox.x1 > newBox.x2) {
-        ;[newBox.x1, newBox.x2] = [newBox.x2, newBox.x1]
+      if (newCanvasBox.x1 > newCanvasBox.x2) {
+        ;[newCanvasBox.x1, newCanvasBox.x2] = [newCanvasBox.x2, newCanvasBox.x1]
       }
-      if (newBox.y1 > newBox.y2) {
-        ;[newBox.y1, newBox.y2] = [newBox.y2, newBox.y1]
+      if (newCanvasBox.y1 > newCanvasBox.y2) {
+        ;[newCanvasBox.y1, newCanvasBox.y2] = [newCanvasBox.y2, newCanvasBox.y1]
       }
 
-      newBox = constrainBox(newBox, canvas)
+      newCanvasBox = constrainBox(newCanvasBox, canvas)
+
+      // Convert back to reference resolution (1920x1080) before storing
+      const newReferenceBox = canvasToReference(newCanvasBox, canvas)
 
       const updatedBoxes = [...area.box]
-      updatedBoxes[resizingBox.boxIndex] = newBox
+      updatedBoxes[resizingBox.boxIndex] = newReferenceBox
       updateArea(resizingBox.areaIndex, { ...area, box: updatedBoxes })
     }
   }
@@ -463,10 +507,12 @@ export function CameraAreaSelector() {
       if (area) {
         const canvas = canvasRef.current
         if (canvas) {
-          const constrainedBox = constrainBox(currentBox, canvas)
+          const constrainedCanvasBox = constrainBox(currentBox, canvas)
+          // Convert to reference resolution (1920x1080) before storing
+          const referenceBox = canvasToReference(constrainedCanvasBox, canvas)
           updateArea(drawingForAreaIndex, {
             ...area,
-            box: [...area.box, constrainedBox],
+            box: [...area.box, referenceBox],
           })
         }
       }
@@ -567,7 +613,7 @@ export function CameraAreaSelector() {
     <div className="grid grid-cols-3 gap-8">
       {/* Left: Video Stream with Overlay */}
       <div className="col-span-2 space-y-2">
-        <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-muted">
+        <div className="relative aspect-video w-full overflow-hidden bg-muted">
           <video ref={videoRef} autoPlay playsInline muted className="h-full w-full object-contain" />
           <canvas
             ref={canvasRef}

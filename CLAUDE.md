@@ -297,8 +297,16 @@ npx prisma studio
 DATABASE_URL=postgresql://admin:changeme@postgres:5432/s_pavilion
 PLC_PORT=/dev/ttyUSB0
 PLC_BAUD_RATE=9600
+PLC_SLAVE_ID=1
 NODE_ENV=production
 ```
+
+**PLC Connection Persistence**:
+- Connection settings are automatically saved to `plc-config.json` on successful connection via Settings UI
+- On startup, NestJS loads saved settings from `plc-config.json` and auto-connects
+- Default settings (if no config file exists): `modbusTCP`, `mock-modbus:502`
+- To change connection: Use Settings UI → Connect → Settings are saved for next startup
+- Config file location: `nest/plc-config.json` (excluded from git)
 
 **Next.js Frontend** (`react/.env.local`):
 ```

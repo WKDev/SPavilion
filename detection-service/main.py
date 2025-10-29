@@ -343,16 +343,13 @@ def init_camera():
             if MOCK_MODE == 'true':
                 print(f"Attempting to open mock video file: {MOCK_VIDEO_FILE}")
                 video_file = MOCK_VIDEO_FILE
-                camera = cv2.VideoCapture(video_file)
+                camera = cv2.VideoCapture(video_file, )
                 camera.set(cv2.CAP_PROP_POS_FRAMES, 0)
                 
                 # Get actual video dimensions and FPS
                 camera_width = int(camera.get(cv2.CAP_PROP_FRAME_WIDTH))
                 camera_height = int(camera.get(cv2.CAP_PROP_FRAME_HEIGHT))
                 video_fps = camera.get(cv2.CAP_PROP_FPS)
-                
-                if video_fps <= 0:
-                    video_fps = 30.0  # Default fallback
                     
                 print(f"Video dimensions: {camera_width}x{camera_height}")
                 print(f"Video FPS: {video_fps}")
@@ -362,24 +359,26 @@ def init_camera():
                 return True
             else:
                 print(f"Attempting to open camera at index {CAMERA_INDEX}...")
-                camera = cv2.VideoCapture(CAMERA_INDEX)
+                camera = cv2.VideoCapture(CAMERA_INDEX, cv2.CAP_V4L2)
 
                 if not camera.isOpened():
                     raise Exception("Failed to open camera")
+
+
+                camera.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'YUYV'))
+                camera.set(cv2.CAP_PROP_FPS, 15)
+                time.sleep(2.0)
 
                 # Get actual camera dimensions and FPS (don't force specific resolution)
                 camera_width = int(camera.get(cv2.CAP_PROP_FRAME_WIDTH))
                 camera_height = int(camera.get(cv2.CAP_PROP_FRAME_HEIGHT))
                 video_fps = camera.get(cv2.CAP_PROP_FPS)
                 
-                # If camera doesn't provide FPS, set a reasonable default
-                if video_fps <= 0:
-                    video_fps = 30.0
                     
                 print(f"Camera opened successfully: {camera_width}x{camera_height}@{video_fps}fps")
                 
-                # Optional: Try to set higher resolution if camera supports it
-                # but keep the actual detected resolution for writer
+                
+                
                 print(f"Camera capabilities:")
                 print(f"  - Max width: {int(camera.get(cv2.CAP_PROP_FRAME_WIDTH))}")
                 print(f"  - Max height: {int(camera.get(cv2.CAP_PROP_FRAME_HEIGHT))}")
@@ -603,9 +602,15 @@ def main():
     print("-" * 50)
 
     try:
+        first_frame = True
         while True:
             # Read frame from camera
             ret, frame = camera.read()
+
+            if first_frame:
+                cv2.imwrite(f"first_frame_{frame_count}.jpg", frame)
+                first_frame = False
+                continue
 
             if not ret:
                 if MOCK_MODE == 'true':

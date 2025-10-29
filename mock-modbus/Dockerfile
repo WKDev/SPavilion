@@ -14,15 +14,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application files
 COPY main.py /app/
-COPY start_mock_plc.sh /app/
-
-# Make startup script executable
-RUN chmod +x /app/start_mock_plc.sh
 
 # Expose Modbus TCP port
 EXPOSE 502
 
-# Expose Modbus RTU over TCP port (for serial simulation)
-EXPOSE 503
-
-CMD ["/app/start_mock_plc.sh"]
+CMD ["python", "main.py"]

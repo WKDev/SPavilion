@@ -108,22 +108,35 @@ export const useStore = create<AppState>((set) => {
     setTimeRange: (range) => {
       const now = new Date()
       let from = new Date()
+      let fromTime = "00:00"
+      let toTime = "23:59"
 
       switch (range) {
         case "1h":
           from = new Date(now.getTime() - 60 * 60 * 1000)
+          fromTime = `${String(from.getHours()).padStart(2, '0')}:${String(from.getMinutes()).padStart(2, '0')}`
+          toTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
           break
         case "6h":
           from = new Date(now.getTime() - 6 * 60 * 60 * 1000)
+          fromTime = `${String(from.getHours()).padStart(2, '0')}:${String(from.getMinutes()).padStart(2, '0')}`
+          toTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
           break
         case "24h":
-          from = new Date(now.getTime() - 24 * 60 * 60 * 1000)
+          from = new Date(now)
+          from.setHours(0, 0, 0, 0) // Set to midnight today
+          fromTime = "00:00"
+          toTime = "23:59"
           break
         case "7d":
           from = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+          fromTime = "00:00"
+          toTime = "23:59"
           break
         case "30d":
           from = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+          fromTime = "00:00"
+          toTime = "23:59"
           break
         case "custom":
           // Don't update dates for custom range (handled by setCustomTimeRange)
@@ -142,6 +155,8 @@ export const useStore = create<AppState>((set) => {
           selectedRange: range,
           fromDate: from,
           toDate: now,
+          fromTime,
+          toTime,
           customRangeLabel: "",
         },
       }))
@@ -230,6 +245,50 @@ export const useShortcutStore = create<ShortcutState>()(
     }),
     {
       name: "shortcut-storage",
+    }
+  )
+)
+
+// DevMan Button interface for custom device control buttons
+export interface DevManButton {
+  id: string
+  buttonTitle: string
+  deviceKey?: keyof DeviceState // For legacy device state (heat, fan, etc.)
+  stateType: "legacy" | "coil" | "register"
+  statusAddr?: number  // Address to read current state from (for coil/register types)
+  commandAddr?: number // Address to write commands to (for coil/register types)
+  stateValue?: number  // Max value for timer (used for register type)
+}
+
+interface DevManButtonState {
+  buttons: DevManButton[]
+  addButton: (button: Omit<DevManButton, "id">) => void
+  updateButton: (id: string, button: Omit<DevManButton, "id">) => void
+  removeButton: (id: string) => void
+}
+
+export const useDevManButtonStore = create<DevManButtonState>()(
+  persist(
+    (set) => ({
+      buttons: [],
+      addButton: (button) =>
+        set((state) => ({
+          buttons: [
+            ...state.buttons,
+            { ...button, id: `devman-${Date.now()}-${Math.random().toString(36).substring(2, 9)}` },
+          ],
+        })),
+      updateButton: (id, button) =>
+        set((state) => ({
+          buttons: state.buttons.map((b) => (b.id === id ? { ...button, id } : b)),
+        })),
+      removeButton: (id) =>
+        set((state) => ({
+          buttons: state.buttons.filter((b) => b.id !== id),
+        })),
+    }),
+    {
+      name: "devman-button-storage",
     }
   )
 )

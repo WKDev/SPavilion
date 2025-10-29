@@ -5,25 +5,17 @@ import { StayRate } from "@/components/dashboard/stay-rate"
 
 export default function DashboardPage() {
   return (
-    <div className="flex h-full flex-row gap-3">
+    <div className="flex h-[calc(100vh-10rem)] flex-row gap-3">
       {/* Left Column (70%): StreamViewer + UsageHistory */}
       <div className="flex flex-[7] flex-col gap-3">
-        <div className="flex-[6]">
-          <StreamViewer />
-        </div>
-        <div className="flex-[4]">
-          <UsageHist />
-        </div>
+        <StreamViewer />
       </div>
 
       {/* Right Column (30%): StayRate + DevMan */}
       <div className="flex-[3] flex flex-col gap-3">
-        <div className="flex-[5]">
-          <StayRate />
-        </div>
-        <div className="flex-[5]">
-          <DevMan />
-        </div>
+      <StayRate />
+      <DevMan />
+      <UsageHist />
       </div>
     </div>
   )

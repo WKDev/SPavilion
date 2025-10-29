@@ -273,6 +273,55 @@ export async function setPLCRegister(
   })
 }
 
+/**
+ * Momentary 스위치 실행 (Rising Edge Detection용)
+ * @param deviceKind - 디바이스 종류 (heat, fan, btsp, light_red, light_green, light_blue, light_white, display)
+ */
+export async function momentarySwitch(
+  deviceKind: string
+): Promise<{ success: boolean; deviceKind: string; message: string }> {
+  const response = await fetchApi<{ success: boolean; deviceKind: string; message: string }>(`/plc/momentary/${deviceKind}`, {
+    method: "POST",
+  })
+  return response
+}
+
+/**
+ * PLC 연결
+ * @param settings - 연결 설정 (protocol, host, port, device, baudRate)
+ */
+export async function connectPLC(settings: {
+  protocol: 'modbusTCP' | 'modbusRTU'
+  host?: string
+  port?: number
+  device?: string
+  baudRate?: number
+}): Promise<{ success: boolean; message: string }> {
+  const response = await fetchApi<{ success: boolean; message: string }>('/plc/connect', {
+    method: "POST",
+    body: JSON.stringify(settings),
+  })
+  return response
+}
+
+/**
+ * PLC 연결 해제
+ */
+export async function disconnectPLC(): Promise<{ success: boolean; message: string }> {
+  const response = await fetchApi<{ success: boolean; message: string }>('/plc/disconnect', {
+    method: "POST",
+  })
+  return response
+}
+
+/**
+ * PLC 연결 상태 조회
+ */
+export async function getPLCStatus(): Promise<{ connected: boolean; timestamp: string }> {
+  const response = await fetchApi<{ connected: boolean; timestamp: string }>('/plc/status')
+  return response
+}
+
 // ========================================
 // Export API Object (기존 코드 호환성)
 // ========================================
@@ -289,6 +338,10 @@ export const api = {
   setPLCCoil,
   getPLCRegisters,
   setPLCRegister,
+  momentarySwitch,
+  connectPLC,
+  disconnectPLC,
+  getPLCStatus,
 }
 
 /**

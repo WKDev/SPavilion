@@ -895,4 +895,128 @@ feel free to ask something unclear before get started.
     - state as coil: set color to green/gray according to coil state.
     - state as register: set progressbar on the button according to the register value, text label to check the remain.
 
+[fix TimeRangeSelector time range]
+- problem and what i want to achieve: 
+  - when user select 1 hour range, the left-side label indicates today 0:00 to today 23:59, but it should be from 1 hour ago to now.
+  - when user select 6 hour range, the left-side label indicates today 0:00 to today 23:59, but it should be from 6 hours ago to now.
+  - when user select 24 hour range, the left-side label indicates today 0:00 to today 23:59, but it should be from today midnight to today 23:59.
+
+- etc:
+  - use Korean language for calendar label like(월, 화, 수, 목, 금, 토, 일)
+  - add selected date label above the calendar. so that user can see the selected date.
+
+
+[fix mock-modbus container]
+- problem: error from nest
+  - ERROR [ModbusService] Failed to read coils 0-99: Modbus exception 2: Illegal data address (register not supported by device)
+  - ERROR [ModbusService] Failed to read registers 0-99: Modbus exception 2: Illegal data address (register not supported by device)
+-strange thing:
+  - this code worked fine when i tested it with macos(with docker-compose). 
+  - but when i tested it with windows, it showed the error.
+
+- what i want to achieve:
+  - find the root cause of the error and fix it.
+
+
+[check camera area selector component]
+- problem:
+  - when user add new camera area full-range, box coords was: x1, y1, x2, y2 are 0, 0, 700,400)
+  - how could be possible? possible x2,y2 value should be grid(aggregated) width and height or actual video width and height.
+  - you need to check the code and fix it.
+
+- todo:
+  - check the canvas size and video size. if they are different, fix the box coords to be the actual video size.
+  - remove border radius from the webrtc stream video element.
+
+[refactor shortcuts-manager component]
+- reason: currently, shortcuts-manager component looks not simple and clean.
+- reference: dev-man.tsx
+- ux scenario:
+  - in /device-management page, under the "Basic" tab, shortcuts are displayed as buttons.
+  - on the right side of the "Basic" tab, there is a "Setting" button.
+  - when user click the "Setting" button, show the shortcuts-manager component.
+  - user can add, edit, remove buttons in the shortcuts-manager component.
+
+- todo:
+  - replace "기본값 설정" button and "Add Shortcut" button with simple "Setting" button.
+  - remove card wrapper, edit button, delete button from the each of shortcut item.
+  
+
+
+
+[refactor dev-man component]
+- reason: currently, dev-man component is not configurable to add/edit/remove buttons.
+- reference: shortcuts-manager.tsx
+- todo:
+  - add setting button to the right side of the dev-man card title. when user click the button, show the shortcuts-manager component.
+  - user can add, edit, remove buttons to the dev-man component.
+
+[redesign /setting page]
+- reason: currently, setting page is not well configured. each of setting items are not well categorized. fragmented.
+- todo:
+  - categorize setting items into following groups:
+    - PLC Settings
+    - Camera Settings
+      - WebRTC endpoint settings
+      - Camera area settings
+    - API Settings
+
+    - general settings:
+      - show how much cpu/ memory/ disk is left in the system
+      - show/ clear disk usage of detection bbox_history, heatmap_hour
+      - show/ clear disk usage of detection device_usage, device_usage_hour
+
+
+[add logics for mock-modbus main.py]
+- remember, user always send 'on' signal for the short period of time. all of the commands are momentary commands.
+- so you need to capture the rising edge of the signal and set the timer for the device.
+
+- case1: [timer 0 state, momentary coil ON -> timer ON]
+  - start the timer for the device. refer the following table:
+    register_addr| Device | Timer Duration(seconds) | Auto-off |
+    |--------|--------|----------------|----------|
+    | 0x00 | heat | 600 | ✓ |
+    | 0x01 | fan | 600 | ✓ |
+    | 0x02 | btsp | 3600 | ✓ |
+    | 0x03 | light_red | 3600 | ✓ |
+    | 0x04 | light_green | 3600 | ✓ |
+    | 0x05 | light_blue | 3600 | ✓ |
+    | 0x06 | light_white | 3600 | ✓ |
+
+- case2: [timer >0 -> state ON]
+  - turn the device on.
+
+- case3: [timer =0 -> state OFF]
+  - turn the device off.
+
+- case4: [timer > 0 state, momentary coil ON -> extend timer to maximum]
+  - extend the timer to maximum (maximum is predefined maximum timer duration.) for the device.
+
+- etc:
+  - timer value is stored and will be updated as timer is running. timer value always >=0.
+
+  // System info endpoint
+  GET /api/system/info
+  Response: {
+    cpu: { usage: number, cores: number },
+    memory: { total: number, used: number, free: number, percentage: number },
+    disk: { total: number, used: number, free: number, percentage: number }
+  }
+
+  // Database stats endpoint
+  GET /api/database/stats
+  Response: {
+    tables: [
+      {
+        name: string,
+        displayName: string,
+        rowCount: number,
+        diskSize: number,
+        description: string
+      }
+    ]
+  }
+
+  // Clear table data endpoint
+  DELETE /api/database/clear/:tableName
 

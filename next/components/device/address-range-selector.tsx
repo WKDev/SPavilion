@@ -1,7 +1,6 @@
 "use client"
 
 import { useState } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -11,6 +10,7 @@ import { Badge } from "@/components/ui/badge"
 interface AddressRangeSelectorProps {
   onRangeChange: (start: number, count: number) => void
   maxAddress?: number
+  maxCount?: number
   defaultStart?: number
   defaultCount?: number
   title?: string
@@ -20,6 +20,7 @@ interface AddressRangeSelectorProps {
 export function AddressRangeSelector({
   onRangeChange,
   maxAddress = 65535,
+  maxCount = 2000,
   defaultStart = 0,
   defaultCount = 100,
   title = "Address Range",
@@ -37,16 +38,16 @@ export function AddressRangeSelector({
     { label: "500", value: 500 },
     { label: "1000", value: 1000 },
     { label: "2000", value: 2000 },
-  ]
+  ].filter(preset => preset.value <= maxCount)
 
   const handleStartChange = (value: string) => {
     const newStart = parseInt(value, 10)
     if (!isNaN(newStart) && newStart >= 0 && newStart <= maxAddress) {
       setStart(newStart)
       // 범위가 최대값을 초과하지 않도록 count 조정
-      const maxCount = Math.min(count, maxAddress - newStart + 1)
-      if (maxCount !== count) {
-        setCount(maxCount)
+      const maxAllowedCount = Math.min(count, maxAddress - newStart + 1, maxCount)
+      if (maxAllowedCount !== count) {
+        setCount(maxAllowedCount)
       }
     }
   }
@@ -55,11 +56,11 @@ export function AddressRangeSelector({
     if (value === "custom") {
       return // custom 입력 모드로 전환
     }
-    
+
     const newCount = parseInt(value, 10)
     if (!isNaN(newCount) && newCount > 0) {
-      const maxCount = Math.min(newCount, maxAddress - start + 1)
-      setCount(maxCount)
+      const maxAllowedCount = Math.min(newCount, maxAddress - start + 1, maxCount)
+      setCount(maxAllowedCount)
       setCustomCount("")
     }
   }
@@ -68,8 +69,8 @@ export function AddressRangeSelector({
     setCustomCount(value)
     const newCount = parseInt(value, 10)
     if (!isNaN(newCount) && newCount > 0) {
-      const maxCount = Math.min(newCount, maxAddress - start + 1)
-      setCount(maxCount)
+      const maxAllowedCount = Math.min(newCount, maxAddress - start + 1, maxCount)
+      setCount(maxAllowedCount)
     }
   }
 
@@ -78,87 +79,62 @@ export function AddressRangeSelector({
   }
 
   const endAddress = start + count - 1
-  const isValidRange = start >= 0 && start <= maxAddress && count > 0 && endAddress <= maxAddress
+  const isValidRange = start >= 0 && start <= maxAddress && count > 0 && count <= maxCount && endAddress <= maxAddress
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          {title}
-          <Badge variant={isValidRange ? "default" : "destructive"}>
-            {isValidRange ? "Valid" : "Invalid"}
-          </Badge>
-        </CardTitle>
-        <CardDescription>{description}</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-2">
-            <Label htmlFor="start-address">Start Address</Label>
-            <Input
-              id="start-address"
-              type="number"
-              min="0"
-              max={maxAddress}
-              value={start}
-              onChange={(e) => handleStartChange(e.target.value)}
-              placeholder="0"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="count">Count</Label>
-            <div className="flex gap-2">
-              <Select value={count.toString()} onValueChange={handleCountChange}>
-                <SelectTrigger className="flex-1">
-                  <SelectValue placeholder="Select count" />
-                </SelectTrigger>
-                <SelectContent>
-                  {presetCounts.map((preset) => (
-                    <SelectItem key={preset.value} value={preset.value.toString()}>
-                      {preset.label}
-                    </SelectItem>
-                  ))}
-                  <SelectItem value="custom">Custom</SelectItem>
-                </SelectContent>
-              </Select>
-              {count > 0 && count <= 2000 && (
-                <Input
-                  className="flex-1"
-                  type="number"
-                  min="1"
-                  max="2000"
-                  value={customCount}
-                  onChange={(e) => handleCustomCountChange(e.target.value)}
-                  placeholder="Custom count"
-                />
-              )}
-            </div>
+    <div className="rounded-lg border p-2 bg-muted/30">
+      <div className="flex items-center gap-2 mb-2">
+        <Label className="text-xs">{title}</Label>
+        <Badge variant={isValidRange ? "secondary" : "destructive"} className="text-xs">
+          {isValidRange ? "✓" : "✗"}
+        </Badge>
+      </div>
+      <div className="grid gap-2 grid-cols-4">
+        <div className="space-y-1">
+          <Label htmlFor="start-address" className="text-xs text-muted-foreground">Start</Label>
+          <Input
+            id="start-address"
+            type="number"
+            min="0"
+            max={maxAddress}
+            value={start}
+            onChange={(e) => handleStartChange(e.target.value)}
+            placeholder="0"
+            className="h-7 text-xs"
+          />
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="count" className="text-xs text-muted-foreground">Count</Label>
+          <Select value={count.toString()} onValueChange={handleCountChange}>
+            <SelectTrigger className="h-7 text-xs">
+              <SelectValue placeholder="Count" />
+            </SelectTrigger>
+            <SelectContent>
+              {presetCounts.map((preset) => (
+                <SelectItem key={preset.value} value={preset.value.toString()} className="text-xs">
+                  {preset.label}
+                </SelectItem>
+              ))}
+              <SelectItem value="custom" className="text-xs">Custom</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1 col-span-2">
+          <Label className="text-xs text-muted-foreground">Range</Label>
+          <div className="flex items-center gap-1 h-7">
+            <span className="text-xs text-muted-foreground">{start}-{endAddress}</span>
+            <Button 
+              onClick={handleApply} 
+              disabled={!isValidRange}
+              size="sm"
+              className="h-6 text-xs ml-auto"
+            >
+              Apply
+            </Button>
           </div>
         </div>
-
-        <div className="flex items-center justify-between">
-          <div className="text-sm text-muted-foreground">
-            Range: {start} - {endAddress} ({count} addresses)
-          </div>
-          <Button 
-            onClick={handleApply} 
-            disabled={!isValidRange}
-            size="sm"
-          >
-            Apply Range
-          </Button>
-        </div>
-
-        {!isValidRange && (
-          <div className="text-sm text-destructive">
-            {start < 0 && "Start address must be >= 0. "}
-            {start > maxAddress && `Start address must be <= ${maxAddress}. `}
-            {count <= 0 && "Count must be > 0. "}
-            {endAddress > maxAddress && `End address (${endAddress}) exceeds maximum (${maxAddress}).`}
-          </div>
-        )}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   )
 }
 

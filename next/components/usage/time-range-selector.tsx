@@ -9,6 +9,15 @@ import { Input } from "@/components/ui/input"
 import { format } from "date-fns"
 import { useStore, type TimeRange } from "@/lib/store"
 import { useState } from "react"
+import type { DayPickerProps } from "react-day-picker"
+
+// Korean weekday formatter
+const koreanWeekdayFormatter: DayPickerProps["formatters"] = {
+  formatWeekdayName: (date) => {
+    const days = ["일", "월", "화", "수", "목", "금", "토"]
+    return days[date.getDay()]
+  },
+}
 
 export function TimeRangeSelector() {
   const timeRange = useStore((state) => state.timeRange)
@@ -103,11 +112,15 @@ export function TimeRangeSelector() {
           <div className="flex gap-3">
             <div className="flex flex-col gap-2">
               <label className="text-xs font-medium">Start</label>
+              <div className="text-xs font-medium text-center py-1 px-2 bg-muted rounded-md">
+                {format(localFromDate, "yyyy년 MM월 dd일")}
+              </div>
               <div className="border rounded-md overflow-hidden">
                 <Calendar
                   mode="single"
                   selected={localFromDate}
                   onSelect={(date) => date && setLocalFromDate(date)}
+                  formatters={koreanWeekdayFormatter}
                   className="p-2"
                   classNames={{
                     months: "flex flex-col",
@@ -139,11 +152,15 @@ export function TimeRangeSelector() {
             </div>
             <div className="flex flex-col gap-2">
               <label className="text-xs font-medium">End</label>
+              <div className="text-xs font-medium text-center py-1 px-2 bg-muted rounded-md">
+                {format(localToDate, "yyyy년 MM월 dd일")}
+              </div>
               <div className="border rounded-md overflow-hidden">
                 <Calendar
                   mode="single"
                   selected={localToDate}
                   onSelect={(date) => date && setLocalToDate(date)}
+                  formatters={koreanWeekdayFormatter}
                   className="p-2"
                   classNames={{
                     months: "flex flex-col",

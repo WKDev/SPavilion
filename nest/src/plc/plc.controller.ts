@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Body, Param, Query, HttpException, HttpStatus } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiParam, ApiQuery } from '@nestjs/swagger';
 import { ModbusService } from '../modbus/modbus.service';
+import { DeviceKind } from '@prisma/client';
 
 @ApiTags('plc')
 @Controller('api/plc')
@@ -20,7 +21,8 @@ export class PlcController {
   ): Promise<{ data: boolean[]; start: number; count: number }> {
     try {
       const startAddr = start ? parseInt(start, 10) : 0;
-      const readCount = count ? parseInt(count, 10) : 100;
+      // Reduced default from 100 to 80 to work around pymodbus 3.11+ limit
+      const readCount = count ? parseInt(count, 10) : 80;
 
       // 유효성 검사
       if (isNaN(startAddr) || startAddr < 0 || startAddr > 65535) {
@@ -115,7 +117,8 @@ export class PlcController {
   ): Promise<{ data: number[]; start: number; count: number }> {
     try {
       const startAddr = start ? parseInt(start, 10) : 0;
-      const readCount = count ? parseInt(count, 10) : 100;
+      // Reduced default from 100 to 80 to work around pymodbus 3.11+ limit
+      const readCount = count ? parseInt(count, 10) : 80;
 
       // 유효성 검사
       if (isNaN(startAddr) || startAddr < 0 || startAddr > 65535) {
@@ -209,5 +212,106 @@ export class PlcController {
       connected: this.modbusService.isPlcConnected(),
       timestamp: new Date().toISOString(),
     };
+  }
+
+  @Post('momentary/:deviceKind')
+  @ApiOperation({ summary: 'Momentary 스위치 실행 (Rising Edge Detection용)' })
+  @ApiParam({ 
+    name: 'deviceKind', 
+    description: '디바이스 종류', 
+    enum: DeviceKind,
+    example: 'heat' 
+  })
+  @ApiResponse({ status: 200, description: 'Momentary 스위치 실행 성공' })
+  @ApiResponse({ status: 400, description: '잘못된 디바이스 종류' })
+  @ApiResponse({ status: 500, description: 'PLC 연결 실패' })
+  async momentarySwitch(
+    @Param('deviceKind') deviceKind: string,
+  ): Promise<{ success: boolean; deviceKind: DeviceKind; message: string }> {
+    try {
+      // Validate device kind
+      if (!Object.values(DeviceKind).includes(deviceKind as DeviceKind)) {
+        throw new HttpException(
+          `Invalid device kind: ${deviceKind}. Valid values: ${Object.values(DeviceKind).join(', ')}`,
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
+      if (!this.modbusService.isPlcConnected()) {
+        throw new HttpException('PLC is not connected', HttpStatus.SERVICE_UNAVAILABLE);
+      }
+
+      await this.modbusService.momentarySwitch(deviceKind as DeviceKind);
+
+      return {
+        success: true,
+        deviceKind: deviceKind as DeviceKind,
+        message: `Momentary switch executed for ${deviceKind}`,
+      };
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        `Failed to execute momentary switch: ${error.message}`,
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Post('connect')
+  @ApiOperation({ summary: 'PLC에 연결' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        protocol: { type: 'string', enum: ['modbusTCP', 'modbusRTU'], description: 'Protocol type' },
+        host: { type: 'string', description: 'Host (for Modbus TCP)' },
+        port: { type: 'number', description: 'Port (for Modbus TCP)' },
+        device: { type: 'string', description: 'Device path (for Modbus RTU)' },
+        baudRate: { type: 'number', description: 'Baud rate (for Modbus RTU)' },
+      },
+      required: ['protocol']
+    }
+  })
+  @ApiResponse({ status: 200, description: 'PLC 연결 성공' })
+  @ApiResponse({ status: 400, description: '잘못된 연결 설정' })
+  @ApiResponse({ status: 500, description: 'PLC 연결 실패' })
+  async connectPlc(
+    @Body() body: {
+      protocol: 'modbusTCP' | 'modbusRTU';
+      host?: string;
+      port?: number;
+      device?: string;
+      baudRate?: number;
+    },
+  ): Promise<{ success: boolean; message: string }> {
+    try {
+      const result = await this.modbusService.connectWithSettings(body);
+      return result;
+    } catch (error) {
+      throw new HttpException(
+        `Failed to connect PLC: ${error.message}`,
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Post('disconnect')
+  @ApiOperation({ summary: 'PLC 연결 해제' })
+  @ApiResponse({ status: 200, description: 'PLC 연결 해제 성공' })
+  async disconnectPlc(): Promise<{ success: boolean; message: string }> {
+    try {
+      await this.modbusService.disconnect();
+      return {
+        success: true,
+        message: 'PLC disconnected successfully',
+      };
+    } catch (error) {
+      throw new HttpException(
+        `Failed to disconnect PLC: ${error.message}`,
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
   }
 }

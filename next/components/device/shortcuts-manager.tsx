@@ -1,16 +1,12 @@
 "use client"
 
 import { useState } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { TMButton } from "@/components/device/tm-button"
 import { useShortcutStore, type Shortcut } from "@/lib/store"
-import { useStore } from "@/lib/store"
-import { api } from "@/lib/api"
 import { Pencil, Trash2, Plus, RotateCcw } from "lucide-react"
 
 interface ShortcutFormData {
@@ -84,7 +80,6 @@ const DEFAULT_SHORTCUTS = [
 
 export function ShortcutsManager() {
   const { shortcuts, addShortcut, updateShortcut, removeShortcut } = useShortcutStore()
-  const { plc } = useStore()
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [editingShortcut, setEditingShortcut] = useState<Shortcut | null>(null)
   const [formData, setFormData] = useState<ShortcutFormData>({
@@ -162,24 +157,6 @@ export function ShortcutsManager() {
     })
   }
 
-  const handleToggleShortcut = async (shortcut: Shortcut) => {
-    try {
-      if (shortcut.stateType === "coil") {
-        // Read current state from statusAddr, write command to commandAddr
-        const currentValue = plc.coils[shortcut.statusAddr] || false
-        await api.setPLCCoil(shortcut.commandAddr, !currentValue)
-      } else {
-        // For register, toggle between 0 and stateValue (max timer value)
-        // Read current state from statusAddr, write command to commandAddr
-        const currentValue = plc.registers[shortcut.statusAddr] || 0
-        const newValue = currentValue === 0 ? shortcut.stateValue : 0
-        await api.setPLCRegister(shortcut.commandAddr, newValue)
-      }
-    } catch (error) {
-      console.error("Failed to toggle shortcut:", error)
-    }
-  }
-
   const handleLoadDefaults = () => {
     const confirmMessage = shortcuts.length > 0
       ? "기존 shortcuts를 모두 삭제하고 기본값으로 재설정하시겠습니까?"
@@ -202,25 +179,19 @@ export function ShortcutsManager() {
 
   return (
     <div className="space-y-4">
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>Shortcuts</CardTitle>
-              <CardDescription>Create custom buttons to control PLC coils and registers</CardDescription>
-            </div>
-            <div className="flex gap-2">
-              <Button size="sm" variant="outline" onClick={handleLoadDefaults}>
-                <RotateCcw className="mr-2 h-4 w-4" />
-                기본값 설정
+      <div className="flex items-center justify-between">
+        <div className="flex gap-2">
+          <Button size="sm" variant="outline" onClick={handleLoadDefaults}>
+            <RotateCcw className="mr-2 h-4 w-4" />
+            Load Defaults
+          </Button>
+          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+            <DialogTrigger asChild>
+              <Button size="sm">
+                <Plus className="mr-2 h-4 w-4" />
+                Add Shortcut
               </Button>
-              <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button size="sm">
-                    <Plus className="mr-2 h-4 w-4" />
-                    Add Shortcut
-                  </Button>
-                </DialogTrigger>
+            </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
                   <DialogTitle>Add New Shortcut</DialogTitle>
@@ -298,36 +269,25 @@ export function ShortcutsManager() {
                 </DialogFooter>
               </DialogContent>
             </Dialog>
-          </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {shortcuts.length === 0 ? (
-            <div className="flex h-32 items-center justify-center rounded-lg border border-dashed">
-              <p className="text-sm text-muted-foreground">No shortcuts yet. Click "Add Shortcut" to create one.</p>
-            </div>
-          ) : (
-            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-              {shortcuts.map((shortcut) => (
-                <Card key={shortcut.id} className="relative">
-                  <CardContent className="pt-6">
-                    <div className="mb-2 flex items-start justify-between gap-2">
-                      <div className="flex-1">
-                        <TMButton
-                          title={shortcut.buttonTitle}
-                          stateType={shortcut.stateType}
-                          statusAddr={shortcut.statusAddr}
-                          commandAddr={shortcut.commandAddr}
-                          stateValue={shortcut.stateValue}
-                          onToggle={() => handleToggleShortcut(shortcut)}
-                        />
-                      </div>
-                    </div>
-                    <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
-                      <span>
-                        {shortcut.stateType === "coil" ? "Coil" : "Register"} R:{shortcut.statusAddr} W:{shortcut.commandAddr}
-                      </span>
-                      <div className="ml-auto flex gap-1">
+        </div>
+      </div>
+
+      {shortcuts.length === 0 ? (
+        <div className="flex h-32 items-center justify-center rounded-lg border border-dashed">
+          <p className="text-sm text-muted-foreground">No shortcuts yet. Click "Add Shortcut" to create one.</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {shortcuts.map((shortcut) => (
+            <div key={shortcut.id} className="flex items-center gap-3 rounded-lg border p-3">
+              <div className="flex-1">
+                <div className="font-medium">{shortcut.buttonTitle}</div>
+                <div className="text-xs text-muted-foreground">
+                  {shortcut.stateType === "coil" ? "Coil" : "Register"} • Read: {shortcut.statusAddr} • Write: {shortcut.commandAddr}
+                  {shortcut.stateType === "register" && ` • Timer: ${shortcut.stateValue}s`}
+                </div>
+              </div>
+              <div className="flex gap-1">
                         <Dialog
                           open={editingShortcut?.id === shortcut.id}
                           onOpenChange={(open) => {
@@ -431,16 +391,12 @@ export function ShortcutsManager() {
                           }}
                         >
                           <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+                </Button>
+              </div>
             </div>
-          )}
-        </CardContent>
-      </Card>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

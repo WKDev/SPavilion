@@ -220,13 +220,13 @@ export function StayRate() {
    */
   if (areas.length === 0) {
     return (
-      <Card className="h-full flex flex-col">
+      <Card className="flex flex-col h-[calc(100vh-45rem)]">
         <CardHeader>
-          <CardTitle>Stay Rate</CardTitle>
+          <CardTitle></CardTitle>
         </CardHeader>
         <CardContent className="flex-1 flex flex-col gap-4">
           <div className="flex-1 flex items-center justify-center text-muted-foreground">
-            No camera areas defined
+          {'정의된 감시영역이 없습니다. 설정/ 감시영역 관리에서 감시영역을 설정해주세요.'}
           </div>
         </CardContent>
       </Card>
@@ -234,9 +234,9 @@ export function StayRate() {
   }
 
   return (
-    <Card className="h-full flex flex-col">
+    <Card className="flex flex-col h-[calc(100vh-45rem)]">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle>Stay Rate</CardTitle>
+        <CardTitle>사용량 순위</CardTitle>
         <button
           onClick={() => setDebugMode(!debugMode)}
           className="text-xs px-2 py-1 rounded bg-muted hover:bg-muted/80 transition-colors"

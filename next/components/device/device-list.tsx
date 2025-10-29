@@ -41,19 +41,29 @@ export function DeviceList() {
   }, [])
 
   const handleToggle = async (device: Device) => {
-    const previousDevices = [...devices]
-
-    // Optimistic update
-    setDevices((prev) =>
-      prev.map((d) => (d.id === device.id ? { ...d, isOn: !d.isOn } : d))
-    )
-
     try {
-      await api.controlDevice(device.id, device.isOn ? "off" : "on")
-    } catch (err) {
-      // Revert on error
-      setDevices(previousDevices)
+      // Use momentary switch for rising edge detection
+      // Convert UI device ID to API device kind
+      const deviceKindMap: Record<string, string> = {
+        'heat': 'heat',
+        'fan': 'fan', 
+        'btsp': 'btsp',
+        'light-red': 'light_red',
+        'light-green': 'light_green',
+        'light-blue': 'light_blue',
+        'light-white': 'light_white',
+        'display': 'display'
+      }
+      
+      const deviceKind = deviceKindMap[device.id]
+      if (!deviceKind) {
+        throw new Error(`Unknown device ID: ${device.id}`)
+      }
 
+      console.log(`[DeviceList] Executing momentary switch for ${deviceKind}`)
+      await api.momentarySwitch(deviceKind)
+      console.log(`[DeviceList] Momentary switch completed for ${deviceKind}`)
+    } catch (err) {
       if (err instanceof ApiClientError) {
         console.error(`장치 제어 실패 [${err.statusCode}]:`, err.message)
       } else {

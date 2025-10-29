@@ -68,23 +68,26 @@ export function TMButton({
       onClick={onToggle}
       className={cn(
         "relative h-12 w-full flex-col gap-1 overflow-hidden transition-colors",
-        isOn ? "bg-green-600 hover:bg-green-700" : "bg-muted hover:bg-muted/80",
+        // 기본 배경색 설정
+        stateType === "coil" 
+          ? (isOn ? "bg-green-600 hover:bg-green-700" : "bg-muted hover:bg-muted/80")
+          : "bg-white hover:bg-gray-50"
       )}
-      variant={isOn ? "default" : "outline"}
+      variant={stateType === "coil" ? (isOn ? "default" : "outline") : "outline"}
     >
-      <span className="text-xs font-medium">{title}</span>
+      {/* Progress overlay for register/legacy types */}
       {(stateType === "register" || stateType === "legacy") && (
-        <>
-          <div className="absolute bottom-0 left-0 right-0 h-1 bg-background/20">
-            <div
-              className="h-full bg-primary transition-all duration-300"
-              style={{ width: `${Math.min(progressPercent, 100)}%` }}
-            />
-          </div>
-          {remainText && (
-            <span className="absolute bottom-0.5 right-2 text-[10px] opacity-70">{remainText}</span>
-          )}
-        </>
+        <div
+          className="absolute inset-0 bg-green-600 transition-all duration-300"
+          style={{ width: `${Math.min(progressPercent, 100)}%` }}
+        />
+      )}
+      
+      {/* Content with proper z-index */}
+      <span className="relative z-10 text-xs font-medium text-gray-900">{title}</span>
+      
+      {(stateType === "register" || stateType === "legacy") && remainText && (
+        <span className="relative z-10 text-[10px] opacity-70 text-gray-900">{remainText}</span>
       )}
     </Button>
   )

@@ -1,0 +1,440 @@
+  문제되는 부분 ⚠️
+
+  onModuleInit()가 서비스 시작 시 자동으로 connect() 호출
+
+● Read(nest\src\modbus\modbus.service.ts)
+  ⎿  Read 10 lines
+
+● Read(nest\src\modbus\modbus.service.ts)
+  ⎿  Read 75 lines
+
+● 문제를 발견했습니다. onModuleInit()에서 서비스 시작 시 자동으로 연결을 시도하고, 실패하면 5초마다      
+  재시도합니다.
+
+  해결책
+
+  AUTO_CONNECT 환경변수를 추가하여 자동 연결을 선택적으로 활성화하도록 수정하겠습니다:
+
+● Update(nest\src\modbus\modbus.service.ts)
+  ⎿  Updated nest\src\modbus\modbus.service.ts with 9 additions and 2 removals
+       52      }
+       53
+       54      async onModuleInit() {
+       55 -      await this.connect();
+       56 -      this.startPolling();
+       55 +      // Only auto-connect if AUTO_CONNECT is enabled (default: false for manual 
+          + control via UI)
+       56 +      const autoConnect = this.configService.get<string>('AUTO_CONNECT', 'false');
+       57 +  
+       58 +      if (autoConnect === 'true') {
+       59 +        await this.connect();
+       60 +        this.startPolling();
+       61 +      } else {
+       62 +        this.logger.log('Auto-connect disabled. Waiting for manual connection via 
+          + UI.');
+       63 +      }
+       64      }
+       65
+       66      async onModuleDestroy() {
+
+● 이제 docker-compose.yml에 환경변수를 추가하겠습니다:
+
+● Update(docker-compose.yml)
+  ⎿  Updated docker-compose.yml with 3 additions and 2 removals
+       50          PLC_BAUD_RATE: 9600
+       51          NODE_ENV: development
+       52          TZ: Asia/Seoul
+       53 -        # Mock environment variables
+       54 -        MOCK_MODE: ${MOCK_MODE:-true}  # Changed default to false for hardware access
+       53 +        # PLC connection settings
+       54 +        AUTO_CONNECT: ${AUTO_CONNECT:-false}  # Auto-connect on startup (false = manual       
+          +  via UI)
+       55 +        MOCK_MODE: ${MOCK_MODE:-true}  # Only used if AUTO_CONNECT=true
+       56          MOCK_PLC_HOST: mock-modbus
+       57          MOCK_PLC_PORT: 502
+       58          # Platform detection
+
+● 이제 README나 CLAUDE.md에 설명도 추가하겠습니다:
+
+● Read(CLAUDE.md)
+  ⎿  Read 30 lines
+
+● Search(pattern: "### Environment Variables", path: "CLAUDE.md", output_mode: "content")
+  ⎿  Found 1 line (ctrl+o to expand)
+
+● Read(CLAUDE.md)
+  ⎿  Read 25 lines
+
+● Update(CLAUDE.md)
+  ⎿  Updated CLAUDE.md with 11 additions
+       298    PLC_PORT=/dev/ttyUSB0
+       299    PLC_BAUD_RATE=9600
+       300    NODE_ENV=production
+       301 +  
+       302 +  # PLC Connection Settings
+       303 +  AUTO_CONNECT=false        # Auto-connect on startup (false = manual via UI, true =         
+           + auto-connect)
+       304 +  MOCK_MODE=true            # Only used if AUTO_CONNECT=true (true = TCP mock server,        
+           + false = RTU hardware)
+       305 +  MOCK_PLC_HOST=mock-modbus # Modbus TCP host (used when AUTO_CONNECT=true and 
+           + MOCK_MODE=true)
+       306 +  MOCK_PLC_PORT=502         # Modbus TCP port (used when AUTO_CONNECT=true and 
+           + MOCK_MODE=true)
+       307    ```
+       308
+       309 +  **Connection Modes**:
+       310 +  - **Manual (Recommended)**: `AUTO_CONNECT=false` - Configure connection via Settings       
+           +  UI
+       311 +  - **Auto Mock**: `AUTO_CONNECT=true` + `MOCK_MODE=true` - Auto-connect to 
+           + mock-modbus:502 on startup
+       312 +  - **Auto Hardware**: `AUTO_CONNECT=true` + `MOCK_MODE=false` - Auto-connect to 
+           + /dev/ttyUSB0 on startup
+       313 +  
+       314    **Next.js Frontend** (`react/.env.local`):
+       315    ```
+       316    NEXT_PUBLIC_API_URL=http://localhost:3000/api
+
+     Tip: Use # to memorize shortcut to quickly add to CLAUDE.md
+
+● 완료했습니다! 이제 답변드립니다:
+
+  ✅ 네, 이제 가능합니다!
+
+  수정 내용
+
+  1. AUTO_CONNECT 환경변수 추가 (기본값: false)
+    - false: 서비스 시작 시 자동 연결 안 함 → UI에서 수동 연결
+    - true: 서비스 시작 시 자동 연결 (기존 동작)
+  2. onModuleInit() 수정 (modbus.service.ts:54-64)
+    - AUTO_CONNECT=false면 자동 연결하지 않고 대기
+    - 로그 출력: "Auto-connect disabled. Waiting for manual connection via UI."
+  3. docker-compose.yml 업데이트
+    - AUTO_CONNECT: ${AUTO_CONNECT:-false} 추가
+    - 기본값은 false (수동 연결 모드)
+
+  이제 동작 방식
+
+  기본 설정 (AUTO_CONNECT=false)
+
+  docker-compose up -d
+  1. NestJS 시작 → 자동 연결 안 함
+  2. 프론트엔드 Settings 페이지에서 mock-modbus:502 입력
+  3. "Connect" 버튼 클릭
+  4. NestJS가 mock-modbus:502로 연결 ✅
+
+  Mock 자동 연결 (필요시)
+
+  AUTO_CONNECT=true MOCK_MODE=true docker-compose up -d
+
+  하드웨어 자동 연결 (필요시)
+
+  AUTO_CONNECT=true MOCK_MODE=false docker-compose up -d
+
+  중요 포인트
+
+  - 프론트엔드는 브라우저에서 실행되지만, API 호출은 NestJS를 통함
+  - NestJS는 Docker 네트워크 내부에 있으므로 mock-modbus 호스트명 해석 가능
+  - 따라서 환경변수 없이도 UI에서 mock-modbus:502 입력하면 정상 동작합니다!
+
+  재시작해서 테스트해보세요:
+  docker-compose restart nest
+
+> autoconnect는 당연히 자동으로 되어야 하지.  nest에서 /api/plc/connect 요청 받으면, 그 정보를 파일에    
+ 저장했다가 nest 시작 단계에서 저장해둔 정보 쓰도록 해. 파일이 없으면 기본값(modbustcp, 
+mock-modbus,502) 사용하도록 해라 
+
+● 좋습니다! "마지막 연결 설정 기억하기" 기능을 구현하겠습니다.
+
+● Update(nest\src\modbus\modbus.service.ts)
+  ⎿  Updated nest\src\modbus\modbus.service.ts with 2 additions
+        3    import { PrismaService } from '../prisma/prisma.service';
+        4    import { DeviceKind } from '@prisma/client';
+        5    import ModbusRTU from 'modbus-serial';
+        6 +  import * as fs from 'fs/promises';
+        7 +  import * as path from 'path';
+        8
+        9    export interface DeviceState {
+       10      heat: boolean;
+
+● Update(nest\src\modbus\modbus.service.ts)
+  ⎿  Updated nest\src\modbus\modbus.service.ts with 8 additions
+       17      display: boolean;
+       18    }
+       19
+       20 +  export interface PLCConnectionConfig {
+       21 +    protocol: 'modbusTCP' | 'modbusRTU';
+       22 +    host?: string;
+       23 +    port?: number;
+       24 +    device?: string;
+       25 +    baudRate?: number;
+       26 +  }
+       27 +  
+       28    @Injectable()
+       29    export class ModbusService implements OnModuleInit, OnModuleDestroy {
+       30      private readonly logger = new Logger(ModbusService.name);
+
+● Update(nest\src\modbus\modbus.service.ts)
+  ⎿  Updated nest\src\modbus\modbus.service.ts with 10 additions
+       36      private isReading = false; // Flag to prevent concurrent reads
+       37      private requestQueue: Array<() => Promise<any>> = []; // Request queue for
+            serialization
+       38
+       39 +    // PLC configuration file path
+       40 +    private readonly CONFIG_FILE_PATH = path.join(process.cwd(), 'plc-config.json');
+       41 +  
+       42 +    // Default PLC connection settings
+       43 +    private readonly DEFAULT_CONFIG: PLCConnectionConfig = {
+       44 +      protocol: 'modbusTCP',
+       45 +      host: 'mock-modbus',
+       46 +      port: 502,
+       47 +    };
+       48 +  
+       49      // Modbus address mapping
+       50      private readonly STATUS_START_ADDR = 0x00; // Read addresses 0x00-0x07
+       51      private readonly CONTROL_START_ADDR = 0x10; // Write addresses 0x10-0x17
+
+● Update(nest\src\modbus\modbus.service.ts)
+  ⎿  Updated nest\src\modbus\modbus.service.ts with 8 additions and 7 removals
+       72      }
+       73
+       74      async onModuleInit() {
+       75 -      // Only auto-connect if AUTO_CONNECT is enabled (default: false for manual 
+          - control via UI)
+       76 -      const autoConnect = this.configService.get<string>('AUTO_CONNECT', 'false');
+       75 +      // Load saved connection settings and auto-connect
+       76 +      const config = await this.loadConnectionConfig();
+       77 +      this.logger.log(`Loading PLC connection config: ${JSON.stringify(config)}`);
+       78
+       79 -      if (autoConnect === 'true') {
+       80 -        await this.connect();
+       81 -        this.startPolling();
+       82 -      } else {
+       83 -        this.logger.log('Auto-connect disabled. Waiting for manual connection via 
+          - UI.');
+       79 +      try {
+       80 +        await this.connectWithSettings(config);
+       81 +      } catch (error) {
+       82 +        this.logger.error(`Failed to auto-connect on startup: ${error.message}`);
+       83 +        this.logger.warn('PLC connection failed. Please configure connection via 
+          + Settings UI.');
+       84        }
+       85      }
+       86
+
+● Update(nest\src\modbus\modbus.service.ts)
+  ⎿  Updated nest\src\modbus\modbus.service.ts with 33 additions
+       812        }
+       813      }
+       814
+       815 +    /**
+       816 +     * Load PLC connection configuration from file
+       817 +     * Returns default config if file doesn't exist
+       818 +     */
+       819 +    private async loadConnectionConfig(): Promise<PLCConnectionConfig> {
+       820 +      try {
+       821 +        const fileContent = await fs.readFile(this.CONFIG_FILE_PATH, 'utf-8');
+       822 +        const config = JSON.parse(fileContent) as PLCConnectionConfig;
+       823 +        this.logger.log(`Loaded PLC config from file: ${this.CONFIG_FILE_PATH}`);
+       824 +        return config;
+       825 +      } catch (error) {
+       826 +        if (error.code === 'ENOENT') {
+       827 +          this.logger.log(`Config file not found. Using default config: 
+           + ${JSON.stringify(this.DEFAULT_CONFIG)}`);
+       828 +          return this.DEFAULT_CONFIG;
+       829 +        }
+       830 +        this.logger.error(`Failed to load config file: ${error.message}. Using default       
+           +  config.`);
+       831 +        return this.DEFAULT_CONFIG;
+       832 +      }
+       833 +    }
+       834 +  
+       835 +    /**
+       836 +     * Save PLC connection configuration to file
+       837 +     */
+       838 +    private async saveConnectionConfig(config: PLCConnectionConfig): Promise<void> {
+       839 +      try {
+       840 +        await fs.writeFile(this.CONFIG_FILE_PATH, JSON.stringify(config, null, 2), 
+           + 'utf-8');
+       841 +        this.logger.log(`Saved PLC config to file: ${this.CONFIG_FILE_PATH}`);
+       842 +      } catch (error) {
+       843 +        this.logger.error(`Failed to save config file: ${error.message}`);
+       844 +        // Don't throw, just log the error
+       845 +      }
+       846 +    }
+       847 +  
+       848    }
+
+● Update(nest\src\modbus\modbus.service.ts)
+  ⎿  Updated nest\src\modbus\modbus.service.ts with 3 additions
+       717              this.isConnected = true;
+       718              this.logger.log(`Connected to Modbus TCP at ${host}:${port} (slave ID:
+             ${slaveId})`);
+       719
+       720 +            // Save connection settings for next startup
+       721 +            await this.saveConnectionConfig(settings);
+       722 +  
+       723              // Restart polling
+       724              this.startPolling();
+       725
+
+● Update(nest\src\modbus\modbus.service.ts)
+  ⎿  Updated nest\src\modbus\modbus.service.ts with 3 additions
+       757              this.isConnected = true;
+       758              this.logger.log(`Connected to PLC at ${device} (${baudRate} baud, slave
+             ID: ${slaveId})`);
+       759
+       760 +            // Save connection settings for next startup
+       761 +            await this.saveConnectionConfig(settings);
+       762 +  
+       763              // Restart polling
+       764              this.startPolling();
+       765
+
+● Update(docker-compose.yml)
+  ⎿  Updated docker-compose.yml with 1 addition and 5 removals
+       48          DATABASE_URL: postgresql://admin:uhBscN4gshrqiwJc@postgres:5432/s_pavilion
+       49          PLC_PORT: /dev/ttyUSB0
+       50          PLC_BAUD_RATE: 9600
+       51 +        PLC_SLAVE_ID: 1
+       52          NODE_ENV: development
+       53          TZ: Asia/Seoul
+       54 -        # PLC connection settings
+       55 -        AUTO_CONNECT: ${AUTO_CONNECT:-false}  # Auto-connect on startup (false = manual       
+          -  via UI)
+       56 -        MOCK_MODE: ${MOCK_MODE:-true}  # Only used if AUTO_CONNECT=true
+       57 -        MOCK_PLC_HOST: mock-modbus
+       58 -        MOCK_PLC_PORT: 502
+       54          # Platform detection
+       55          PLATFORM: ${PLATFORM:-windows}  # linux or windows
+       56        depends_on:
+
+● Update(CLAUDE.md)
+  ⎿  Updated CLAUDE.md with 7 additions and 10 removals
+       297    DATABASE_URL=postgresql://admin:changeme@postgres:5432/s_pavilion
+       298    PLC_PORT=/dev/ttyUSB0
+       299    PLC_BAUD_RATE=9600
+       300 +  PLC_SLAVE_ID=1
+       301    NODE_ENV=production
+       302 -  
+       303 -  # PLC Connection Settings
+       304 -  AUTO_CONNECT=false        # Auto-connect on startup (false = manual via UI, true =         
+           - auto-connect)
+       305 -  MOCK_MODE=true            # Only used if AUTO_CONNECT=true (true = TCP mock server,        
+           - false = RTU hardware)
+       306 -  MOCK_PLC_HOST=mock-modbus # Modbus TCP host (used when AUTO_CONNECT=true and 
+           - MOCK_MODE=true)
+       307 -  MOCK_PLC_PORT=502         # Modbus TCP port (used when AUTO_CONNECT=true and 
+           - MOCK_MODE=true)
+       302    ```
+       303
+       304 -  **Connection Modes**:
+       305 -  - **Manual (Recommended)**: `AUTO_CONNECT=false` - Configure connection via Settings       
+           -  UI
+       306 -  - **Auto Mock**: `AUTO_CONNECT=true` + `MOCK_MODE=true` - Auto-connect to 
+           - mock-modbus:502 on startup
+       307 -  - **Auto Hardware**: `AUTO_CONNECT=true` + `MOCK_MODE=false` - Auto-connect to 
+           - /dev/ttyUSB0 on startup
+       304 +  **PLC Connection Persistence**:
+       305 +  - Connection settings are automatically saved to `plc-config.json` on successful 
+           + connection via Settings UI
+       306 +  - On startup, NestJS loads saved settings from `plc-config.json` and auto-connects
+       307 +  - Default settings (if no config file exists): `modbusTCP`, `mock-modbus:502`
+       308 +  - To change connection: Use Settings UI → Connect → Settings are saved for next 
+           + startup
+       309 +  - Config file location: `nest/plc-config.json` (excluded from git)
+       310
+       311    **Next.js Frontend** (`react/.env.local`):
+       312    ```
+
+     Tip: Use # to memorize shortcut to quickly add to CLAUDE.md
+
+● Read(.gitignore)
+  ⎿  Read 1 line
+
+● Update(.gitignore)
+  ⎿  Updated .gitignore with 5 additions and 1 removal
+       1 -  postgres_data/
+       1   \ No newline at end of file
+       2 +  postgres_data/
+       3 +  
+       4 +  # PLC connection config (user-specific, not tracked in git)
+       5 +  plc-config.json
+       6 +  nest/plc-config.json
+       7   \ No newline at end of file
+
+● 완료했습니다! 이제 PLC 연결 설정이 자동으로 저장되고 다음 시작 시 복원됩니다.
+
+  구현 내용
+
+  1. 자동 설정 저장/로드 시스템 (modbus.service.ts)
+
+  추가된 기능:
+
+  - PLCConnectionConfig 인터페이스 - 연결 설정 타입 정의
+  - CONFIG_FILE_PATH - 설정 파일 경로: nest/plc-config.json
+  - DEFAULT_CONFIG - 기본 설정: { protocol: 'modbusTCP', host: 'mock-modbus', port: 502 }
+  - loadConnectionConfig() - 파일에서 설정 로드 (없으면 기본값 사용)
+  - saveConnectionConfig() - 파일에 설정 저장
+
+  수정된 메서드:
+
+  - onModuleInit() - 저장된 설정을 로드하여 자동 연결
+  - connectWithSettings() - 연결 성공 시 설정을 파일에 저장
+  - disconnect() - Promise로 완전히 대기하도록 개선
+
+  2. Docker Compose 정리 (docker-compose.yml)
+
+  - AUTO_CONNECT, MOCK_MODE, MOCK_PLC_HOST, MOCK_PLC_PORT 환경변수 제거
+  - PLC_SLAVE_ID 추가 (명시적으로 설정)
+
+  3. Git Ignore 추가 (.gitignore)
+
+  plc-config.json
+  nest/plc-config.json
+
+  4. 문서 업데이트 (CLAUDE.md)
+
+  - 새로운 자동 저장 시스템 설명
+  - 기본 설정 및 동작 방식 설명
+
+  동작 방식
+
+  첫 실행 (설정 파일 없음)
+
+  1. NestJS 시작
+  2. plc-config.json 파일 없음 → 기본값 사용 (modbusTCP, mock-modbus:502)
+  3. mock-modbus:502 연결 시도
+  4. 성공 → Polling 시작
+  5. 실패 → 로그 기록, Settings UI에서 설정 가능
+
+  Settings UI에서 연결 변경
+
+  1. Settings 페이지 → PLC Configuration
+  2. Protocol 선택: Modbus TCP / Modbus RTU
+  3. 연결 정보 입력 (예: localhost:502)
+  4. "Connect" 버튼 클릭
+  5. 연결 성공 → plc-config.json에 자동 저장
+
+  다음 실행 (설정 파일 있음)
+
+  1. NestJS 시작
+  2. plc-config.json에서 마지막 설정 로드
+  3. 저장된 설정으로 자동 연결
+  4. 연결 성공 → Polling 시작
+
+  테스트 방법
+
+  # NestJS 재시작
+  docker-compose restart nest
+
+  # 로그 확인
+  docker-compose logs -f nest
+
+  예상 로그:
+  [ModbusService] Loading PLC connection config:
+  {"protocol":"modbusTCP","host":"mock-modbus","port":502}
+  [ModbusService] Config file not found. Using default config:
+  {"protocol":"modbusTCP","host":"mock-modbus","port":502}
+  [ModbusService] Connected to Modbus TCP at mock-modbus:502 (slave ID: 1)
+
+  Settings UI에서 다른 주소로 연결 후 재시작하면, 새 설정이 자동으로 사용됩니다!

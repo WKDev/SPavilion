@@ -1,92 +1,88 @@
 "use client"
 
+import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { TMButton } from "@/components/device/tm-button"
-import { useStore } from "@/lib/store"
-import { api, ApiClientError } from "@/lib/api"
+import { useStore, useShortcutStore } from "@/lib/store"
+import { api } from "@/lib/api"
+import { ShortcutsManager } from "@/components/device/shortcuts-manager"
+import { Settings } from "lucide-react"
 
 export function DevMan() {
-  const { devices, updateDevice } = useStore()
+  const { plc } = useStore()
+  const { shortcuts } = useShortcutStore()
+  const [isManagerOpen, setIsManagerOpen] = useState(false)
 
   /**
-   * 장치 토글 핸들러
-   * API 호출 (NestJS → Modbus → PLC)
+   * Shortcut toggle handler
    */
-  const handleToggle = async (deviceKey: keyof typeof devices) => {
-    const device = devices[deviceKey]
-    const newState = !device.isOn
-
-    // Optimistic update (즉각적인 UI 반영)
-    updateDevice(deviceKey, { ...device, isOn: newState })
-
-    // API 호출: POST /api/devices/control
+  const handleToggleShortcut = async (shortcut: typeof shortcuts[0]) => {
     try {
-      await api.controlDevice(deviceKey, newState ? "on" : "off")
-    } catch (error) {
-      // 에러 발생 시 이전 상태로 복원
-      updateDevice(deviceKey, device)
-
-      // 에러 로깅
-      if (error instanceof ApiClientError) {
-        console.error(`장치 제어 실패 [${error.statusCode}]:`, error.message)
-      } else {
-        console.error("장치 제어 실패:", error)
+      if (shortcut.stateType === "coil") {
+        const currentValue = plc.coils[shortcut.statusAddr] || false
+        await api.setPLCCoil(shortcut.commandAddr, !currentValue)
+      } else if (shortcut.stateType === "register") {
+        const currentValue = plc.registers[shortcut.statusAddr] || 0
+        const newValue = currentValue === 0 ? shortcut.stateValue : 0
+        await api.setPLCRegister(shortcut.commandAddr, newValue)
       }
-
-      // TODO: Toast 메시지로 사용자에게 알림
-      // toast.error(`${deviceKey} 제어 실패`)
+    } catch (error) {
+      console.error("Failed to toggle shortcut:", error)
     }
   }
 
   return (
-    <Card className="h-full flex flex-col">
-      <CardHeader>
-        <CardTitle>Device Control</CardTitle>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-2 overflow-y-auto">
-        <TMButton
-          title="Heat"
-          isOn={devices.heat.isOn}
-          progress={devices.heat.progress}
-          onToggle={() => handleToggle("heat")}
-        />
-        <TMButton
-          title="Fan"
-          isOn={devices.fan.isOn}
-          progress={devices.fan.progress}
-          onToggle={() => handleToggle("fan")}
-        />
-        <TMButton
-          title="BTSP"
-          isOn={devices.btsp.isOn}
-          progress={devices.btsp.progress}
-          onToggle={() => handleToggle("btsp")}
-        />
-        <TMButton
-          title="Red Light"
-          isOn={devices["light-red"].isOn}
-          progress={devices["light-red"].progress}
-          onToggle={() => handleToggle("light-red")}
-        />
-        <TMButton
-          title="Green Light"
-          isOn={devices["light-green"].isOn}
-          progress={devices["light-green"].progress}
-          onToggle={() => handleToggle("light-green")}
-        />
-        <TMButton
-          title="Blue Light"
-          isOn={devices["light-blue"].isOn}
-          progress={devices["light-blue"].progress}
-          onToggle={() => handleToggle("light-blue")}
-        />
-        <TMButton
-          title="White Light"
-          isOn={devices["light-white"].isOn}
-          progress={devices["light-white"].progress}
-          onToggle={() => handleToggle("light-white")}
-        />
-      </CardContent>
-    </Card>
+    <>
+      <Card className="h-full flex flex-col">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle>Device Control</CardTitle>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 w-8 p-0"
+              onClick={() => setIsManagerOpen(true)}
+            >
+              <Settings className="h-4 w-4" />
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-2 overflow-y-auto">
+          {shortcuts.length === 0 ? (
+            <div className="flex h-32 items-center justify-center rounded-lg border border-dashed">
+              <p className="text-sm text-muted-foreground">
+                No shortcuts configured. Click Settings to add shortcuts.
+              </p>
+            </div>
+          ) : (
+            shortcuts.map((shortcut) => (
+              <TMButton
+                key={shortcut.id}
+                title={shortcut.buttonTitle}
+                stateType={shortcut.stateType}
+                statusAddr={shortcut.statusAddr}
+                commandAddr={shortcut.commandAddr}
+                stateValue={shortcut.stateValue}
+                onToggle={() => handleToggleShortcut(shortcut)}
+              />
+            ))
+          )}
+        </CardContent>
+      </Card>
+
+      <Dialog open={isManagerOpen} onOpenChange={setIsManagerOpen}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Device Control Settings</DialogTitle>
+            <DialogDescription>
+              Create and manage custom buttons to control PLC coils and registers
+            </DialogDescription>
+          </DialogHeader>
+          <ShortcutsManager />
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }

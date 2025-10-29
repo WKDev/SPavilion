@@ -12,6 +12,10 @@ import { useStore, useCameraAreaStore } from "@/lib/store"
 
 type ViewOption = "video" | "heatmap" | "surveillance"
 
+// Fixed reference resolution (matches heatmap resolution from detection service)
+const REFERENCE_WIDTH = 1920
+const REFERENCE_HEIGHT = 1080
+
 // Color map for surveillance areas (matching camera-area-selector)
 const COLOR_MAP: Record<number, { stroke: string; fill: string; name: string }> = {
   1: { stroke: "#ef4444", fill: "rgba(239, 68, 68, 0.15)", name: "Red" },
@@ -120,6 +124,19 @@ export function StreamViewer() {
     }
   }, [])
 
+  // Helper function to convert reference resolution (1920x1080) to canvas coordinates
+  // All boxes are stored in reference resolution (1920x1080) for consistency with heatmap
+  const referenceToCanvas = (box: { x1: number; y1: number; x2: number; y2: number }, canvas: HTMLCanvasElement) => {
+    const scaleX = canvas.width / REFERENCE_WIDTH
+    const scaleY = canvas.height / REFERENCE_HEIGHT
+    return {
+      x1: box.x1 * scaleX,
+      y1: box.y1 * scaleY,
+      x2: box.x2 * scaleX,
+      y2: box.y2 * scaleY,
+    }
+  }
+
   // Draw surveillance areas on canvas
   useEffect(() => {
     if (!surveillanceCanvasRef.current || !videoRef.current || !selectedViews.includes("surveillance"))
@@ -151,6 +168,9 @@ export function StreamViewer() {
         }
 
         area.box.forEach((box) => {
+          // Convert from reference resolution (1920x1080) to canvas coordinates for display
+          const canvasBox = referenceToCanvas(box, canvas)
+
           // Set colors and styles
           if (!area.enabled) {
             // Disabled state: dashed border, semi-transparent
@@ -165,16 +185,16 @@ export function StreamViewer() {
             ctx.setLineDash([])
           }
 
-          const width = box.x2 - box.x1
-          const height = box.y2 - box.y1
+          const width = canvasBox.x2 - canvasBox.x1
+          const height = canvasBox.y2 - canvasBox.y1
 
-          ctx.fillRect(box.x1, box.y1, width, height)
-          ctx.strokeRect(box.x1, box.y1, width, height)
+          ctx.fillRect(canvasBox.x1, canvasBox.y1, width, height)
+          ctx.strokeRect(canvasBox.x1, canvasBox.y1, width, height)
           ctx.setLineDash([]) // Reset dash
 
           // Draw area nickname in center without background
-          const centerX = (box.x1 + box.x2) / 2
-          const centerY = (box.y1 + box.y2) / 2
+          const centerX = (canvasBox.x1 + canvasBox.x2) / 2
+          const centerY = (canvasBox.y1 + canvasBox.y2) / 2
 
           ctx.font = "bold 14px sans-serif"
           ctx.textAlign = "center"
@@ -254,7 +274,7 @@ export function StreamViewer() {
       </div>
 
       {/* Stream Display */}
-      <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-muted">
+      <div className="relative aspect-video w-full overflow-hidden bg-muted">
         {/* Loading State */}
         {isConnecting && (
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/80">

@@ -8,6 +8,7 @@ export class PLCPollingService {
   private pollingInterval = 1000 // 1 second default
   private coilRange = { start: 0, count: 100 }
   private registerRange = { start: 0, count: 100 }
+  private momentarySwitchQueue: Set<string> = new Set() // Track momentary switches in progress
 
   constructor(
     private onUpdate: (coils: boolean[], registers: number[], coilRange: { start: number; count: number }, registerRange: { start: number; count: number }) => void
@@ -80,5 +81,41 @@ export class PLCPollingService {
       this.stop()
       this.start(interval)
     }
+  }
+
+  /**
+   * Execute momentary switch for rising edge detection
+   * Sends momentary pulse: true immediately, then false after 100ms
+   * @param deviceKind - Device kind (heat, fan, btsp, light_red, light_green, light_blue, light_white, display)
+   */
+  async momentarySwitch(deviceKind: string): Promise<void> {
+    // Prevent duplicate momentary switches for the same device
+    if (this.momentarySwitchQueue.has(deviceKind)) {
+      console.warn(`Momentary switch for ${deviceKind} already in progress, skipping`)
+      return
+    }
+
+    this.momentarySwitchQueue.add(deviceKind)
+
+    try {
+      console.log(`[PLCPolling] Executing momentary switch for ${deviceKind}`)
+      await api.momentarySwitch(deviceKind)
+      console.log(`[PLCPolling] Momentary switch completed for ${deviceKind}`)
+    } catch (error) {
+      console.error(`[PLCPolling] Momentary switch failed for ${deviceKind}:`, error)
+      throw error
+    } finally {
+      // Remove from queue after completion
+      this.momentarySwitchQueue.delete(deviceKind)
+    }
+  }
+
+  /**
+   * Check if momentary switch is in progress for a device
+   * @param deviceKind - Device kind to check
+   * @returns true if momentary switch is in progress
+   */
+  isMomentarySwitchInProgress(deviceKind: string): boolean {
+    return this.momentarySwitchQueue.has(deviceKind)
   }
 }
