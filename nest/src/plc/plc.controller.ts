@@ -314,4 +314,30 @@ export class PlcController {
       );
     }
   }
+
+  @Get('connection-settings')
+  @ApiOperation({ summary: 'Get current PLC connection settings' })
+  @ApiResponse({
+    status: 200,
+    description: 'Current connection settings',
+    schema: {
+      type: 'object',
+      properties: {
+        protocol: { type: 'string', enum: ['modbusTCP', 'modbusRTU'] },
+        host: { type: 'string' },
+        port: { type: 'number' },
+        device: { type: 'string' },
+        baudRate: { type: 'number' },
+      }
+    }
+  })
+  async getConnectionSettings(): Promise<{
+    protocol: 'modbusTCP' | 'modbusRTU';
+    host?: string;
+    port?: number;
+    device?: string;
+    baudRate?: number;
+  }> {
+    return this.modbusService.getCurrentConnectionSettings();
+  }
 }

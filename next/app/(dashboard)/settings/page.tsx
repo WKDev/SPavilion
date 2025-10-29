@@ -9,26 +9,28 @@ import { Settings, Camera, Database } from "lucide-react"
 export default function SettingsPage() {
   return (
     <div className="space-y-3">
-      <div>
-        <h1 className="text-3xl font-bold">Settings</h1>
-        <p className="text-muted-foreground">Configure your system preferences and monitor resources</p>
-      </div>
 
       <Tabs defaultValue="plc" className="w-full">
         <TabsList className="grid w-full grid-cols-3">
+        <TabsTrigger value="general" className="flex items-center gap-2">
+            <Database className="h-4 w-4" />
+            일반
+          </TabsTrigger>
           <TabsTrigger value="plc" className="flex items-center gap-2">
+            
             <Settings className="h-4 w-4" />
-            PLC Settings
+            PLC 연결설정
           </TabsTrigger>
           <TabsTrigger value="camera" className="flex items-center gap-2">
             <Camera className="h-4 w-4" />
-            Camera Settings
+            카메라 감시범위 설정
           </TabsTrigger>
-          <TabsTrigger value="general" className="flex items-center gap-2">
-            <Database className="h-4 w-4" />
-            General Settings
-          </TabsTrigger>
+
         </TabsList>
+
+        <TabsContent value="general" className="mt-4">
+          <GeneralSettings />
+        </TabsContent>
 
         <TabsContent value="plc" className="mt-4">
           <PLCSettings />
@@ -38,9 +40,7 @@ export default function SettingsPage() {
           <CameraSettings />
         </TabsContent>
 
-        <TabsContent value="general" className="mt-4">
-          <GeneralSettings />
-        </TabsContent>
+
       </Tabs>
     </div>
   )

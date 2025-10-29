@@ -1,0 +1,23 @@
+{
+  "name": "s-pavilion-host-monitor",
+  "version": "1.0.0",
+  "description": "Windows host system monitor service for S-Pavilion",
+  "main": "host-monitor.js",
+  "scripts": {
+    "start": "node host-monitor.js",
+    "install-service": "node install-service.js",
+    "uninstall-service": "node uninstall-service.js"
+  },
+  "keywords": [
+    "system-monitor",
+    "windows-service",
+    "metrics"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "systeminformation": "^5.23.14",
+    "node-windows": "^1.0.0-beta.8"
+  }
+}

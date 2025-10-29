@@ -91,7 +91,7 @@ export function AddressRangeSelector({
       </div>
       <div className="grid gap-2 grid-cols-4">
         <div className="space-y-1">
-          <Label htmlFor="start-address" className="text-xs text-muted-foreground">Start</Label>
+          <Label htmlFor="start-address" className="text-xs text-muted-foreground">시작 주소</Label>
           <Input
             id="start-address"
             type="number"
@@ -100,14 +100,14 @@ export function AddressRangeSelector({
             value={start}
             onChange={(e) => handleStartChange(e.target.value)}
             placeholder="0"
-            className="h-7 text-xs"
+            className=""
           />
         </div>
         <div className="space-y-1">
-          <Label htmlFor="count" className="text-xs text-muted-foreground">Count</Label>
+          <Label htmlFor="count" className="text-xs text-muted-foreground">개수</Label>
           <Select value={count.toString()} onValueChange={handleCountChange}>
             <SelectTrigger className="h-7 text-xs">
-              <SelectValue placeholder="Count" />
+              <SelectValue placeholder="개수" />
             </SelectTrigger>
             <SelectContent>
               {presetCounts.map((preset) => (
@@ -120,7 +120,7 @@ export function AddressRangeSelector({
           </Select>
         </div>
         <div className="space-y-1 col-span-2">
-          <Label className="text-xs text-muted-foreground">Range</Label>
+          <Label className="text-xs text-muted-foreground">범위</Label>
           <div className="flex items-center gap-1 h-7">
             <span className="text-xs text-muted-foreground">{start}-{endAddress}</span>
             <Button 
@@ -129,7 +129,7 @@ export function AddressRangeSelector({
               size="sm"
               className="h-6 text-xs ml-auto"
             >
-              Apply
+              적용
             </Button>
           </div>
         </div>

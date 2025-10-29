@@ -322,6 +322,26 @@ export async function getPLCStatus(): Promise<{ connected: boolean; timestamp: s
   return response
 }
 
+/**
+ * PLC 연결 설정 조회
+ */
+export async function getPLCConnectionSettings(): Promise<{
+  protocol: 'modbusTCP' | 'modbusRTU'
+  host?: string
+  port?: number
+  device?: string
+  baudRate?: number
+}> {
+  const response = await fetchApi<{
+    protocol: 'modbusTCP' | 'modbusRTU'
+    host?: string
+    port?: number
+    device?: string
+    baudRate?: number
+  }>('/plc/connection-settings')
+  return response
+}
+
 // ========================================
 // Export API Object (기존 코드 호환성)
 // ========================================
@@ -342,6 +362,7 @@ export const api = {
   connectPLC,
   disconnectPLC,
   getPLCStatus,
+  getPLCConnectionSettings,
 }
 
 /**
@@ -353,3 +374,104 @@ export { ApiClientError }
  * Export types for external use
  */
 export type { HistogramData, HeatmapData }
+
+// ========================================
+// System Monitoring API
+// ========================================
+
+/**
+ * System information response types
+ */
+export interface SystemInfo {
+  cpu: {
+    usage: number
+    cores: number
+  }
+  memory: {
+    total: number
+    used: number
+    free: number
+    percentage: number
+  }
+  disk: {
+    total: number
+    used: number
+    free: number
+    percentage: number
+  }
+}
+
+export interface HealthCheckResponse {
+  status: string
+  timestamp: string
+}
+
+/**
+ * GET /api/health
+ * Health check endpoint
+ */
+export async function getHealth(): Promise<HealthCheckResponse> {
+  return await fetchApi<HealthCheckResponse>('/health')
+}
+
+/**
+ * GET /api/system/info
+ * Get system resource information (CPU, memory, disk)
+ */
+export async function getSystemInfo(): Promise<SystemInfo> {
+  return await fetchApi<SystemInfo>('/system/info')
+}
+
+// ========================================
+// Database Management API
+// ========================================
+
+/**
+ * Database statistics response types
+ */
+export interface TableStats {
+  name: string
+  displayName: string
+  rowCount: number
+  diskSize: number
+  description: string
+}
+
+export interface DatabaseStatsResponse {
+  tables: TableStats[]
+}
+
+export interface ClearTableResponse {
+  success: boolean
+  message: string
+  tableName: string
+}
+
+/**
+ * GET /api/database/stats
+ * Get database table statistics
+ */
+export async function getDatabaseStats(): Promise<DatabaseStatsResponse> {
+  return await fetchApi<DatabaseStatsResponse>('/database/stats')
+}
+
+/**
+ * DELETE /api/database/clear/:tableName
+ * Clear all data from a specific table
+ *
+ * @param tableName - Table name (bbox_history, heatmap_hour, device_usage, device_usage_hour)
+ */
+export async function clearTable(tableName: string): Promise<ClearTableResponse> {
+  return await fetchApi<ClearTableResponse>(`/database/clear/${tableName}`, {
+    method: 'DELETE',
+  })
+}
+
+// Update API object export
+export const apiExtended = {
+  ...api,
+  getHealth,
+  getSystemInfo,
+  getDatabaseStats,
+  clearTable,
+}

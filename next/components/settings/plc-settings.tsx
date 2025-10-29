@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
@@ -17,20 +17,51 @@ export function PLCSettings() {
   const isPolling = useStore((state) => state.isPolling)
   const [pollingInterval, setPollingInterval] = useState(1000)
   const [pollingEnabled, setPollingEnabled] = useState(true)
-  const [protocol, setProtocol] = useState<ProtocolType>("modbusRTU")
-  
+  const [protocol, setProtocol] = useState<ProtocolType>("modbusTCP")
+
   // Modbus TCP settings
-  const [tcpHost, setTcpHost] = useState("localhost")
+  const [tcpHost, setTcpHost] = useState("mock-modbus")
   const [tcpPort, setTcpPort] = useState("502")
-  
+
   // Modbus RTU settings
   const [rtuDevice, setRtuDevice] = useState("/dev/ttyUSB0")
   const [rtuBaudRate, setRtuBaudRate] = useState("9600")
-  
+
   const [isConnecting, setIsConnecting] = useState(false)
   const [connectionStatus, setConnectionStatus] = useState<string>("")
-  
+  const [isLoadingSettings, setIsLoadingSettings] = useState(true)
+
   const polling = usePLCPolling(pollingEnabled, pollingInterval)
+
+  // Fetch current connection settings on component mount
+  useEffect(() => {
+    async function loadCurrentSettings() {
+      try {
+        setIsLoadingSettings(true)
+        const settings = await api.getPLCConnectionSettings()
+
+        // Update state with fetched settings
+        setProtocol(settings.protocol)
+
+        if (settings.protocol === "modbusTCP") {
+          if (settings.host) setTcpHost(settings.host)
+          if (settings.port) setTcpPort(settings.port.toString())
+        } else {
+          if (settings.device) setRtuDevice(settings.device)
+          if (settings.baudRate) setRtuBaudRate(settings.baudRate.toString())
+        }
+
+        setConnectionStatus("Loaded saved settings")
+      } catch (error: any) {
+        console.error("Failed to load connection settings:", error)
+        setConnectionStatus(`Failed to load settings: ${error?.message || 'Unknown error'}`)
+      } finally {
+        setIsLoadingSettings(false)
+      }
+    }
+
+    loadCurrentSettings()
+  }, [])
 
   const handleIntervalChange = () => {
     polling.setInterval(pollingInterval)
@@ -81,18 +112,16 @@ export function PLCSettings() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>PLC Configuration</CardTitle>
-        <CardDescription>Configure PLC connection and polling settings</CardDescription>
+        <CardTitle>PLC 연결 설정</CardTitle>
       </CardHeader>
-      <CardContent className="space-y-6">
+      <CardContent className="space-y-6 grid grid-cols-2 gap-4">
+        
         {/* Connection Settings */}
-        <div className="space-y-4">
-          <h3 className="text-sm font-medium">Connection Settings</h3>
-          
-          {/* Protocol Selection */}
-          <div className="space-y-2">
-            <Label htmlFor="protocol">Connection Protocol</Label>
-            <Select value={protocol} onValueChange={(value) => setProtocol(value as ProtocolType)}>
+        <div className="flex flex-col gap-4">
+        <div className="flex flex-row gap-4 items-end">
+              <div className="space-y-2">
+                <Label htmlFor="protocol">연결방식</Label>           
+              <Select value={protocol} onValueChange={(value) => setProtocol(value as ProtocolType)}>
               <SelectTrigger id="protocol">
                 <SelectValue />
               </SelectTrigger>
@@ -101,21 +130,18 @@ export function PLCSettings() {
                 <SelectItem value="modbusRTU">Modbus RTU</SelectItem>
               </SelectContent>
             </Select>
-            <p className="text-xs text-muted-foreground">
-              {protocol === "modbusTCP" 
-                ? "TCP/IP network connection" 
-                : "Serial RS-485/RS-232 connection"}
-            </p>
-          </div>
+            </div>
+        
 
           {/* Conditional Fields - Modbus TCP */}
           {protocol === "modbusTCP" && (
-            <div className="grid gap-4 md:grid-cols-2">
+              <div className="flex flex-row gap-4">
               <div className="space-y-2">
                 <Label htmlFor="plc-host">Host</Label>
                 <Input
                   id="plc-host"
                   value={tcpHost}
+                  className="w-full"
                   onChange={(e) => setTcpHost(e.target.value)}
                   placeholder="localhost"
                 />
@@ -126,6 +152,7 @@ export function PLCSettings() {
                   id="plc-port"
                   type="number"
                   value={tcpPort}
+                  className="w-full"
                   onChange={(e) => setTcpPort(e.target.value)}
                   placeholder="502"
                 />
@@ -136,28 +163,34 @@ export function PLCSettings() {
           {/* Conditional Fields - Modbus RTU */}
           {protocol === "modbusRTU" && (
             <>
+              <div className="flex flex-row gap-4">
               <div className="space-y-2">
-                <Label htmlFor="plc-device">Device Path</Label>
+                <Label htmlFor="plc-device">장치 경로</Label>
                 <Input
                   id="plc-device"
                   value={rtuDevice}
+                  className="w-full"
                   onChange={(e) => setRtuDevice(e.target.value)}
                   placeholder="/dev/ttyUSB0"
                 />
-                <p className="text-xs text-muted-foreground">Serial device path for PLC connection</p>
+              </div>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="plc-baud">Baud Rate</Label>
+                <Label htmlFor="plc-baud">Baud</Label>
                 <Input
                   id="plc-baud"
                   value={rtuBaudRate}
                   onChange={(e) => setRtuBaudRate(e.target.value)}
                   placeholder="9600"
                 />
-                <p className="text-xs text-muted-foreground">Serial communication baud rate</p>
               </div>
             </>
           )}
+
+          <Button className="" onClick={handleConnect} disabled={isConnecting || isLoadingSettings}>
+            {isLoadingSettings ? "Loading..." : isConnecting ? "Connecting..." : "Connect"}
+          </Button>
+          </div>
 
           {/* Connection Status */}
           {connectionStatus && (
@@ -166,24 +199,20 @@ export function PLCSettings() {
             </div>
           )}
 
-          <Button onClick={handleConnect} disabled={isConnecting}>
-            {isConnecting ? "Connecting..." : "Connect"}
-          </Button>
         </div>
 
         {/* Polling Settings */}
-        <div className="space-y-4 border-t pt-6">
-          <h3 className="text-sm font-medium">Polling Settings</h3>
-          <div className="flex items-center justify-between">
+        <div className="space-y-4 border-l pl-4">
+          {/* <div className="flex items-center justify-between">
             <div className="space-y-0.5">
               <Label>Enable Polling</Label>
               <p className="text-xs text-muted-foreground">Automatically fetch PLC status</p>
             </div>
             <Switch checked={pollingEnabled} onCheckedChange={handleTogglePolling} />
-          </div>
+          </div> */}
 
           <div className="space-y-2">
-            <Label htmlFor="polling-interval">Polling Interval (ms)</Label>
+            <Label htmlFor="polling-interval">스캔 주기(ms)</Label>
             <div className="flex gap-2">
               <Input
                 id="polling-interval"
@@ -196,14 +225,14 @@ export function PLCSettings() {
               />
               <Button onClick={handleIntervalChange}>Apply</Button>
             </div>
-            <p className="text-xs text-muted-foreground">Recommended: 1000ms (1 second)</p>
+            <p className="text-xs text-muted-foreground">기본값: 1000ms (1s)</p>
           </div>
 
           <div className="rounded-lg border p-3">
             <div className="flex items-center justify-between">
-              <span className="text-sm font-medium">Status</span>
+              <span className="text-sm font-medium">PLC 스캔 상태</span>
               <span className={`text-sm ${isPolling ? "text-green-600" : "text-muted-foreground"}`}>
-                {isPolling ? "Active" : "Inactive"}
+                {isPolling ? "활성" : "비활성"}
               </span>
             </div>
           </div>

@@ -1,0 +1,57 @@
+
+  When NestJS runs inside a Docker container, system APIs only report container metrics (virtualized resources), not the actual
+  Windows host PC system information.
+
+  Solution
+
+  Created a Windows Host Monitor service that runs natively on Windows and exposes host system metrics via HTTP.
+
+  What Was Implemented
+
+  1. Host Monitor Service (host-monitor/)
+
+  - host-monitor.js: Express HTTP server that runs on Windows host
+  - package.json: Dependencies (express, systeminformation, node-windows)
+  - install-service.js: Installs as auto-start Windows Service
+  - uninstall-service.js: Removes the Windows Service
+  - README.md: Comprehensive installation and usage guide
+
+  2. NestJS Backend Updates
+
+  - SystemService (nest/src/system/system.service.ts:13-100):
+    - Now tries to fetch from Windows host monitor first
+    - Falls back to container metrics if unavailable
+    - 5-second timeout with proper error handling
+    - Logs connection status on startup
+
+  3. Configuration
+
+  - nest/.env.example:14: Added HOST_MONITOR_URL variable with documentation
+  - docker-compose.yml:57: Added environment variable with default value http://host.docker.internal:9100
+  - CLAUDE.md:328-416: Added comprehensive documentation section
+
+  How It Works
+
+  Windows Host PC
+      ↓
+  host-monitor.js (port 9100)
+      ↓
+  http://host.docker.internal:9100/api/system/info
+      ↓
+  NestJS Docker Container
+      ↓
+  Frontend (displays real Windows host metrics)
+
+  Installation Instructions for Windows
+
+  1. Install Node.js on Windows (if not already installed)
+    - Download from nodejs.org
+    - Install LTS version
+  2. Install the service:
+  cd host-monitor
+  npm install
+  # Right-click PowerShell/CMD → "Run as administrator"
+  npm run install-service
+  3. Verify it's running:
+  curl http://localhost:9100/api/system/info
+  4. Done! The service auto-starts on Windows boot. NestJS will automatically use host metrics.

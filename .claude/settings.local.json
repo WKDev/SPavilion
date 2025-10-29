@@ -14,7 +14,8 @@
       "Bash(docker-compose restart:*)",
       "Bash(curl:*)",
       "Bash(docker-compose build:*)",
-      "Bash(docker-compose up:*)"
+      "Bash(docker-compose up:*)",
+      "Bash(lsof:*)"
     ],
     "deny": [],
     "ask": []

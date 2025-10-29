@@ -1020,3 +1020,9 @@ feel free to ask something unclear before get started.
   // Clear table data endpoint
   DELETE /api/database/clear/:tableName
 
+[add apis to check the system info / resource / db status]
+- read general-settings.tsx and add following apis
+- check system resource
+- check current db status
+- clean / flush db
+- check api connection

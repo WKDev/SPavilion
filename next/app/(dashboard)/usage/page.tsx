@@ -60,8 +60,8 @@ export default function UsagePage() {
   return (
     <div className="space-y-3">
       <div>
-        <h1 className="text-3xl font-bold">Usage Analytics</h1>
-        <p className="text-muted-foreground">View device usage history and analytics</p>
+        <h1 className="text-2xl font-bold">장치 사용량 분석</h1>
+        <p className="text-muted-foreground mb-2">장치 사용량 기록 및 분석 / 히스토그램 표기</p>
       </div>
 
 

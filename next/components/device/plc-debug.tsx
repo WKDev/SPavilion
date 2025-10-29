@@ -107,19 +107,17 @@ export function PLCDebug() {
       {/* PLC Status */}
       <Card>
         <CardHeader>
-          <CardTitle>PLC Debug</CardTitle>
-          <CardDescription>Monitor and control PLC coils and registers</CardDescription>
+          <CardTitle>PLC 세부 정보</CardTitle>
+          <CardDescription>PLC 코일과 레지스터 상태 모니터링 및 제어</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 gap-4">
             {/* Coils Section */}
             <div className="space-y-3">
-              <h3 className="text-sm font-semibold">Coils</h3>
-
               {/* Coil Address Range Selector */}
               <AddressRangeSelector
-                title="Coil Address"
-                description="Select range (Max 2000)"
+                title="코일 주소"
+                description="범위 선택 (최대 2000)"
                 onRangeChange={handleCoilRangeChange}
                 defaultStart={coilRange.start}
                 defaultCount={coilRange.count}
@@ -128,14 +126,10 @@ export function PLCDebug() {
 
               {/* Coil Status Display */}
               <div className="rounded-lg border p-3">
-                <div className="mb-3 flex items-center justify-between">
-                  <h4 className="text-xs font-medium">
-                    Range: {addressDisplayMode === "hex" ? formatHex(coilRange.start) : coilRange.start}-
-                    {addressDisplayMode === "hex" ? formatHex(coilRange.start + coilRange.count - 1) : coilRange.start + coilRange.count - 1}
-                  </h4>
-                  <div className="flex items-center gap-2">
+                <div className="mb-3 flex items-end">
+                  <div className="flex items-end gap-4 justify-between w-full">
                     <div className="flex items-center gap-1.5">
-                      <Label className="text-xs text-muted-foreground">Columns:</Label>
+                      <Label className="text-xs text-muted-foreground">열 개수:</Label>
                       <div className="flex border rounded">
                         <Button
                           variant={columnCount === 10 ? "default" : "ghost"}
@@ -156,7 +150,7 @@ export function PLCDebug() {
                       </div>
                     </div>
                     <div className="flex items-center gap-1.5">
-                      <Label className="text-xs text-muted-foreground">Addr:</Label>
+                      <Label className="text-xs text-muted-foreground">주소 표시 방식:</Label>
                       <div className="flex border rounded">
                         <Button
                           variant={addressDisplayMode === "decimal" ? "default" : "ghost"}
@@ -241,12 +235,10 @@ export function PLCDebug() {
 
             {/* Registers Section */}
             <div className="space-y-3">
-              <h3 className="text-sm font-semibold">Registers</h3>
-
               {/* Register Address Range Selector */}
               <AddressRangeSelector
-                title="Register Address"
-                description="Select range (Max 2000)"
+                title="레지스터 주소"
+                description="레지스터 주소 범위 선택 (최대 2000)"
                 onRangeChange={handleRegisterRangeChange}
                 defaultStart={registerRange.start}
                 defaultCount={registerRange.count}
@@ -255,14 +247,14 @@ export function PLCDebug() {
 
               {/* Register Status Display */}
               <div className="rounded-lg border p-3">
-                <div className="mb-3 flex items-center justify-between">
-                  <h4 className="text-xs font-medium">
+                <div className="mb-3 flex items-end">
+                  {/* <h4 className="text-xs font-medium">
                     Range: {addressDisplayMode === "hex" ? formatHex(registerRange.start) : registerRange.start}-
                     {addressDisplayMode === "hex" ? formatHex(registerRange.start + registerRange.count - 1) : registerRange.start + registerRange.count - 1}
-                  </h4>
-                  <div className="flex items-center gap-2">
+                  </h4> */}
+                  <div className="flex items-end gap-4 justify-between w-full">
                     <div className="flex items-center gap-1.5">
-                      <Label className="text-xs text-muted-foreground">Columns:</Label>
+                      <Label className="text-xs text-muted-foreground">열 개수:</Label>
                       <div className="flex border rounded">
                         <Button
                           variant={columnCount === 10 ? "default" : "ghost"}
@@ -283,7 +275,7 @@ export function PLCDebug() {
                       </div>
                     </div>
                     <div className="flex items-center gap-1.5">
-                      <Label className="text-xs text-muted-foreground">Addr:</Label>
+                      <Label className="text-xs text-muted-foreground">주소 표시 방식:</Label>
                       <div className="flex border rounded">
                         <Button
                           variant={addressDisplayMode === "decimal" ? "default" : "ghost"}
@@ -304,7 +296,7 @@ export function PLCDebug() {
                       </div>
                     </div>
                     <div className="flex items-center gap-1.5">
-                      <Label className="text-xs text-muted-foreground">Value:</Label>
+                      <Label className="text-xs text-muted-foreground">값 표시 방식:</Label>
                       <div className="flex border rounded">
                         <Button
                           variant={registerDisplayMode === "decimal" ? "default" : "ghost"}

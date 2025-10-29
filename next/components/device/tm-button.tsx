@@ -67,7 +67,9 @@ export function TMButton({
     <Button
       onClick={onToggle}
       className={cn(
-        "relative h-12 w-full flex-col gap-1 overflow-hidden transition-colors",
+          // set maximum width to 200px
+        "max-w-40",
+        "relative h-15  flex-col overflow-hidden transition-colors",
         // 기본 배경색 설정
         stateType === "coil" 
           ? (isOn ? "bg-green-600 hover:bg-green-700" : "bg-muted hover:bg-muted/80")
@@ -84,7 +86,7 @@ export function TMButton({
       )}
       
       {/* Content with proper z-index */}
-      <span className="relative z-10 text-xs font-medium text-gray-900">{title}</span>
+      <span className="relative z-10 text-lg font-medium text-gray-900">{title}</span>
       
       {(stateType === "register" || stateType === "legacy") && remainText && (
         <span className="relative z-10 text-[10px] opacity-70 text-gray-900">{remainText}</span>

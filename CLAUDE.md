@@ -299,6 +299,9 @@ PLC_PORT=/dev/ttyUSB0
 PLC_BAUD_RATE=9600
 PLC_SLAVE_ID=1
 NODE_ENV=production
+
+# Windows Host Monitor (optional, for Docker containers to access real Windows host system info)
+HOST_MONITOR_URL=http://host.docker.internal:9100
 ```
 
 **PLC Connection Persistence**:
@@ -321,6 +324,96 @@ RTSP_URL=rtsp://mediamtx:8554/camera
 CAMERA_INDEX=0
 CELL_SIZE=16
 ```
+
+## Windows Host Monitor (Optional)
+
+When running S-Pavilion in Docker on a Windows host, the standard Node.js system APIs (`os` module, `systeminformation` library) only report **container metrics** (virtualized CPU, limited memory), not the actual **Windows host PC** system information.
+
+To display real Windows host system metrics in the frontend, we provide an optional **Windows Host Monitor** service:
+
+### Architecture
+
+```
+Windows Host PC
+    ↓
+host-monitor.js (Node.js native process on Windows)
+    ├→ Express HTTP server (port 9100)
+    ├→ systeminformation (reads Windows WMI)
+    └→ os module (native Windows APIs)
+            ↓
+    http://host.docker.internal:9100
+            ↓
+Docker Container (WSL2/Hyper-V VM)
+    └→ NestJS SystemService
+        └→ GET /api/system/info (returns host metrics)
+```
+
+### Features
+
+- ✅ Runs natively on Windows host (not in Docker)
+- ✅ Auto-starts on Windows boot (installed as Windows Service)
+- ✅ Exposes HTTP API on port 9100
+- ✅ Returns real CPU, RAM, and disk metrics from Windows host
+- ✅ NestJS automatically falls back to container metrics if unavailable
+
+### Installation
+
+**Prerequisites**: Node.js ≥18.0.0 installed on Windows host (separate from Docker)
+
+```bash
+# 1. Install dependencies
+cd host-monitor
+npm install
+
+# 2. Install as Windows Service (requires Administrator)
+# Right-click PowerShell/CMD → "Run as administrator"
+npm run install-service
+
+# 3. Verify installation
+# Open Services (services.msc) → Find "S-Pavilion Host Monitor"
+# Test: curl http://localhost:9100/api/system/info
+```
+
+### Configuration
+
+The service is automatically configured in `docker-compose.yml`:
+
+```yaml
+nest:
+  environment:
+    HOST_MONITOR_URL: http://host.docker.internal:9100
+```
+
+**Fallback Behavior**:
+- If `HOST_MONITOR_URL` is set and accessible → Returns Windows host metrics
+- If `HOST_MONITOR_URL` is not set or unreachable → Returns Docker container metrics
+- Check NestJS logs for connection status: "Windows Host Monitor enabled" or "using container metrics"
+
+### API Endpoints
+
+- `GET /health` - Health check
+- `GET /api/system/info` - Full system info (CPU + Memory + Disk)
+- `GET /api/system/cpu` - CPU-only metrics
+- `GET /api/system/memory` - Memory-only metrics
+- `GET /api/system/disk` - Disk-only metrics
+
+### Uninstalling
+
+```bash
+# Run as Administrator
+cd host-monitor
+npm run uninstall-service
+```
+
+### Troubleshooting
+
+**Service won't start**: Run as Administrator, check Event Viewer (Windows Logs → Application)
+
+**Can't access from Docker**: Verify `host.docker.internal` resolves (Docker Desktop feature), or use Windows host IP address
+
+**Still shows container metrics**: Check `HOST_MONITOR_URL` is set in NestJS environment, check NestJS logs for connection errors
+
+For detailed documentation, see `host-monitor/README.md`.
 
 ## Code Style Conventions
 

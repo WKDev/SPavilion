@@ -68,12 +68,12 @@ export function ShortcutsDisplay() {
     <Card className="h-full flex flex-col">
       <CardHeader>
             <div className="flex items-center justify-between">
-              <CardTitle>Device Control</CardTitle>
+              <CardTitle>장치 제어</CardTitle>
             <Dialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
               <DialogTrigger asChild>
                 <Button variant="outline" size="sm">
                   <Settings className="mr-2 h-4 w-4" />
-                  Settings
+                  설정
                 </Button>
               </DialogTrigger>
               <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
@@ -88,11 +88,11 @@ export function ShortcutsDisplay() {
             </Dialog>
             </div>
       </CardHeader>
-      <CardContent className="flex flex-col gap-2 overflow-y-auto">
+      <CardContent className="flex flex-wrap gap-2 overflow-y-auto">
         {shortcuts.length === 0 ? (
           <div className="flex h-32 items-center justify-center rounded-lg border border-dashed">
             <p className="text-sm text-muted-foreground">
-              No shortcuts configured. Click Settings to add shortcuts.
+              버튼이 정의되지 않았습니다. 설정에서 버튼을 추가하세요.
             </p>
           </div>
         ) : (

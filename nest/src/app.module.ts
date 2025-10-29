@@ -8,6 +8,8 @@ import { DevicesModule } from './devices/devices.module';
 import { HeatmapModule } from './heatmap/heatmap.module';
 import { BboxHistoryModule } from './bbox-history/bbox-history.module';
 import { PlcModule } from './plc/plc.module';
+import { SystemModule } from './system/system.module';
+import { DatabaseModule } from './database/database.module';
 
 @Module({
   imports: [
@@ -21,6 +23,8 @@ import { PlcModule } from './plc/plc.module';
     HeatmapModule,
     BboxHistoryModule,
     PlcModule,
+    SystemModule,
+    DatabaseModule,
   ],
   controllers: [AppController],
   providers: [AppService],

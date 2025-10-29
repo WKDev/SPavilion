@@ -85,7 +85,7 @@ export function GeneralSettings() {
 
   const fetchSystemInfo = async () => {
     try {
-      const response = await fetch("/api/system/info")
+      const response = await fetch(`${apiUrl}/system/info`)
       if (response.ok) {
         const data = await response.json()
         setSystemInfo(data)
@@ -99,7 +99,7 @@ export function GeneralSettings() {
 
   const fetchTableStats = async () => {
     try {
-      const response = await fetch("/api/database/stats")
+      const response = await fetch(`${apiUrl}/database/stats`)
       if (response.ok) {
         const data = await response.json()
         setTableStats(data.tables || [])
@@ -122,7 +122,7 @@ export function GeneralSettings() {
   const handleClearTable = async (tableName: string) => {
     setClearing(tableName)
     try {
-      const response = await fetch(`/api/database/clear/${tableName}`, {
+      const response = await fetch(`${apiUrl}/database/clear/${tableName}`, {
         method: "DELETE",
       })
 
@@ -155,12 +155,12 @@ export function GeneralSettings() {
       {/* API Settings */}
       <div className="space-y-4">
         <div>
-          <h3 className="text-lg font-medium">API Configuration</h3>
-          <p className="text-sm text-muted-foreground">Configure backend API endpoint for data management</p>
+          <h3 className="text-lg font-medium">서버 주소 설정</h3>
         </div>
         <div className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="api-url">API Base URL</Label>
+            <Label htmlFor="api-url">서버 주소</Label>
+            <div className="flex flex-row gap-4 items-end">
             <Input
               id="api-url"
               type="text"
@@ -168,24 +168,26 @@ export function GeneralSettings() {
               onChange={(e) => setApiUrl(e.target.value)}
               placeholder="http://localhost:3000/api"
             />
-            <p className="text-xs text-muted-foreground">Backend server API endpoint</p>
-          </div>
-
-          <Button
-            variant="outline"
-            className="w-full bg-transparent"
+            <Button
+            variant="default"
+            className="w-24"
             onClick={handleTestConnection}
             disabled={testing}
           >
             {testing ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Testing Connection...
+                연결 테스트 중...
               </>
             ) : (
-              "Test Connection"
+              "연결 테스트"
             )}
           </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">백엔드 서버 api endpoint</p>
+          </div>
+
+          
 
           {testResult && (
             <div
@@ -198,12 +200,12 @@ export function GeneralSettings() {
               {testResult === "success" ? (
                 <>
                   <CheckCircle2 className="h-4 w-4" />
-                  <span className="text-sm">Connection successful</span>
+                  <span className="text-sm">연결 성공</span>
                 </>
               ) : (
                 <>
                   <XCircle className="h-4 w-4" />
-                  <span className="text-sm">Connection failed</span>
+                  <span className="text-sm">연결 실패</span>
                 </>
               )}
             </div>
@@ -212,16 +214,17 @@ export function GeneralSettings() {
       </div>
 
       {/* System Resources */}
-      <div className="space-y-4 border-t pt-6">
+      <div className="flex flex-row gap-4">
+      <div className="space-y-4 border-r pr-4 w-1/2">
         <div>
-          <h3 className="text-lg font-medium">System Resources</h3>
-          <p className="text-sm text-muted-foreground">Monitor CPU, memory, and disk usage</p>
+          <h3 className="text-lg font-medium">시스템 정보</h3>
+          <p className="text-sm text-muted-foreground">CPU, 메모리, 디스크 사용량 모니터링</p>
         </div>
 
         {loadingSystem ? (
-          <p className="text-sm text-muted-foreground">Loading system information...</p>
+          <p className="text-sm text-muted-foreground">시스템 정보 로딩 중...</p>
         ) : !systemInfo ? (
-          <p className="text-sm text-muted-foreground">System information unavailable</p>
+          <p className="text-sm text-muted-foreground">시스템 정보 사용 불가</p>
         ) : (
           <div className="space-y-6">
             {/* CPU Usage */}
@@ -229,7 +232,7 @@ export function GeneralSettings() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Cpu className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm font-medium">CPU Usage</span>
+                  <span className="text-sm font-medium">프로세서</span>
                 </div>
                 <span className="text-sm text-muted-foreground">
                   {systemInfo.cpu.usage.toFixed(1)}% ({systemInfo.cpu.cores} cores)
@@ -274,11 +277,11 @@ export function GeneralSettings() {
       </div>
 
       {/* Database Management */}
-      <div className="space-y-4 border-t pt-6">
+      <div className="space-y-4 w-1/2">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="text-lg font-medium">Database Management</h3>
-            <p className="text-sm text-muted-foreground">View and manage database disk usage</p>
+            <h3 className="text-lg font-medium">데이터베이스 관리</h3>
+            <p className="text-sm text-muted-foreground">데이터베이스 디스크 사용량 모니터링</p>
           </div>
           <Button variant="outline" size="sm" onClick={fetchTableStats}>
             <RefreshCw className="mr-2 h-4 w-4" />
@@ -362,6 +365,7 @@ export function GeneralSettings() {
             ))}
           </div>
         )}
+      </div>
       </div>
     </div>
   )

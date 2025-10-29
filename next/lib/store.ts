@@ -57,9 +57,11 @@ interface AppState {
 }
 
 export const useStore = create<AppState>((set) => {
-  // Initialize with last 24 hours as default
+  // Initialize with today midnight to now as default
   const now = new Date()
-  const from = new Date(now.getTime() - 24 * 60 * 60 * 1000)
+  const from = new Date(now)
+  from.setHours(0, 0, 0, 0) // Set to midnight today
+  const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
 
   return {
     devices: {
@@ -80,7 +82,7 @@ export const useStore = create<AppState>((set) => {
       fromDate: from,
       toDate: now,
       fromTime: "00:00",
-      toTime: "23:59",
+      toTime: currentTime,
       customRangeLabel: "",
     },
 

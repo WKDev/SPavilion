@@ -13,8 +13,8 @@ export default function DeviceManagementPage() {
   return (
     <div className="space-y-3">
       <div>
-        <h1 className="text-3xl font-bold">Device Management</h1>
-        <p className="text-muted-foreground">Manage and control your PLC devices</p>
+        <h1 className="text-2xl font-bold">장치 관리</h1>
+        <p className="text-muted-foreground mb-2">PLC 장치 관리 및 제어</p>
       </div>
 
       <Tabs defaultValue="basic" className="w-full">

@@ -24,37 +24,37 @@ interface ButtonFormData {
 // Default buttons configuration based on legacy device state
 const DEFAULT_BUTTONS = [
   {
-    buttonTitle: "Heat",
+    buttonTitle: "열선",
     stateType: "legacy" as const,
     deviceKey: "heat" as keyof DeviceState,
   },
   {
-    buttonTitle: "Fan",
+    buttonTitle: "팬",
     stateType: "legacy" as const,
     deviceKey: "fan" as keyof DeviceState,
   },
   {
-    buttonTitle: "BTSP",
+    buttonTitle: "블루투스 스피커",
     stateType: "legacy" as const,
     deviceKey: "btsp" as keyof DeviceState,
   },
   {
-    buttonTitle: "Red Light",
+    buttonTitle: "적색 LED",
     stateType: "legacy" as const,
     deviceKey: "light-red" as keyof DeviceState,
   },
   {
-    buttonTitle: "Green Light",
+    buttonTitle: "녹색 LED",
     stateType: "legacy" as const,
     deviceKey: "light-green" as keyof DeviceState,
   },
   {
-    buttonTitle: "Blue Light",
+    buttonTitle: "청색 LED",
     stateType: "legacy" as const,
     deviceKey: "light-blue" as keyof DeviceState,
   },
   {
-    buttonTitle: "White Light",
+    buttonTitle: "백색 LED",
     stateType: "legacy" as const,
     deviceKey: "light-white" as keyof DeviceState,
   },
@@ -225,58 +225,58 @@ export function DevManManager() {
             <div className="flex gap-2">
               <Button size="sm" variant="outline" onClick={handleLoadDefaults}>
                 <RotateCcw className="mr-2 h-4 w-4" />
-                Load Defaults
+                기본 값 적용
               </Button>
               <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
                 <DialogTrigger asChild>
                   <Button size="sm">
                     <Plus className="mr-2 h-4 w-4" />
-                    Add Button
+                    버튼 추가
                   </Button>
                 </DialogTrigger>
                 <DialogContent>
                   <DialogHeader>
-                    <DialogTitle>Add New Button</DialogTitle>
-                    <DialogDescription>Create a custom button for device control</DialogDescription>
+                    <DialogTitle>버튼 추가</DialogTitle>
+                    <DialogDescription>디바이스 제어 버튼 추가</DialogDescription>
                   </DialogHeader>
                   <div className="space-y-4">
                     <div className="space-y-2">
-                      <Label htmlFor="add-title">Button Title</Label>
+                      <Label htmlFor="add-title">버튼 이름</Label>
                       <Input
                         id="add-title"
                         value={formData.buttonTitle}
                         onChange={(e) => handleFormChange("buttonTitle", e.target.value)}
-                        placeholder="e.g., Emergency Stop"
+                        placeholder="예) 긴급 정지"
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="add-type">State Type</Label>
+                      <Label htmlFor="add-type">상태 타입</Label>
                       <Select value={formData.stateType} onValueChange={(value) => handleFormChange("stateType", value)}>
                         <SelectTrigger id="add-type">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="legacy">Legacy Device (Heat, Fan, etc.)</SelectItem>
-                          <SelectItem value="coil">PLC Coil (Boolean)</SelectItem>
-                          <SelectItem value="register">PLC Register (Timer)</SelectItem>
+                          {/* <SelectItem value="legacy">Legacy Device (Heat, Fan, etc.)</SelectItem> */}
+                          <SelectItem value="coil">PLC 코일 (Boolean)</SelectItem>
+                          <SelectItem value="register">PLC 레지스터 (Timer)</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
                     {formData.stateType === "legacy" && (
                       <div className="space-y-2">
-                        <Label htmlFor="add-device-key">Device</Label>
+                        <Label htmlFor="add-device-key">장치</Label>
                         <Select value={formData.deviceKey} onValueChange={(value) => handleFormChange("deviceKey", value)}>
                           <SelectTrigger id="add-device-key">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="heat">Heat</SelectItem>
-                            <SelectItem value="fan">Fan</SelectItem>
+                            <SelectItem value="heat">열선</SelectItem>
+                            <SelectItem value="fan">팬</SelectItem>
                             <SelectItem value="btsp">BTSP</SelectItem>
-                            <SelectItem value="light-red">Light Red</SelectItem>
-                            <SelectItem value="light-green">Light Green</SelectItem>
-                            <SelectItem value="light-blue">Light Blue</SelectItem>
-                            <SelectItem value="light-white">Light White</SelectItem>
+                            <SelectItem value="light-red">적색 LED</SelectItem>
+                            <SelectItem value="light-green">녹색 LED</SelectItem>
+                            <SelectItem value="light-blue">청색 LED</SelectItem>
+                            <SelectItem value="light-white">백색 LED</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>

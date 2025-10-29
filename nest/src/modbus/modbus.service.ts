@@ -35,6 +35,7 @@ export class ModbusService implements OnModuleInit, OnModuleDestroy {
   private isConnected = false;
   private isReading = false; // Flag to prevent concurrent reads
   private requestQueue: Array<() => Promise<any>> = []; // Request queue for serialization
+  private currentConfig: PLCConnectionConfig; // Current active connection settings
 
   // PLC configuration file path
   private readonly CONFIG_FILE_PATH = path.join(process.cwd(), 'plc-config.json');
@@ -74,6 +75,7 @@ export class ModbusService implements OnModuleInit, OnModuleDestroy {
   async onModuleInit() {
     // Load saved connection settings and auto-connect
     const config = await this.loadConnectionConfig();
+    this.currentConfig = config; // Store loaded config
     this.logger.log(`Loading PLC connection config: ${JSON.stringify(config)}`);
 
     try {
@@ -87,27 +89,32 @@ export class ModbusService implements OnModuleInit, OnModuleDestroy {
   async onModuleDestroy() {
     this.stopPolling();
     if (this.isConnected) {
-      this.client.close(() => {
-        this.logger.log('Modbus connection closed');
-      });
-    }
-    // Close mock TCP client if connected
-    const mockMode = this.configService.get<string>('MOCK_MODE', 'false');
-    if (mockMode === 'true' && this.mockTcpClient) {
-      this.mockTcpClient.close(() => {
-        this.logger.log('Mock Modbus TCP connection closed');
-      });
+      // Close the appropriate client based on current config
+      if (this.currentConfig?.protocol === 'modbusTCP' && this.mockTcpClient) {
+        this.mockTcpClient.close(() => {
+          this.logger.log('Modbus TCP connection closed');
+        });
+      } else if (this.client) {
+        this.client.close(() => {
+          this.logger.log('Modbus RTU connection closed');
+        });
+      }
     }
   }
 
   private async connect() {
-    const mockMode = this.configService.get<string>('MOCK_MODE', 'false');
-    
-    if (mockMode === 'true') {
-      // Mock 모드: Modbus TCP 서버에 연결
-      const host = this.configService.get<string>('MOCK_PLC_HOST', 'mock-modbus');
-      const port = parseInt(this.configService.get<string>('MOCK_PLC_PORT', '502'), 10);
-      const slaveId = parseInt(this.configService.get<string>('PLC_SLAVE_ID', '1'), 10);
+    // Use currentConfig instead of environment variables
+    if (!this.currentConfig) {
+      this.logger.error('No connection config available. Cannot connect.');
+      return;
+    }
+
+    const slaveId = parseInt(this.configService.get<string>('PLC_SLAVE_ID', '1'), 10);
+
+    if (this.currentConfig.protocol === 'modbusTCP') {
+      // Modbus TCP connection
+      const host = this.currentConfig.host || 'mock-modbus';
+      const port = this.currentConfig.port || 502;
 
       try {
         await this.mockTcpClient.connectTCP(host, { port });
@@ -122,25 +129,24 @@ export class ModbusService implements OnModuleInit, OnModuleDestroy {
         if (connectionTest) {
           this.isConnected = true;
           this.logger.log(
-            `Mock mode enabled - Connected to Modbus TCP at ${host}:${port} (slave ID: ${slaveId})`,
+            `Connected to Modbus TCP at ${host}:${port} (slave ID: ${slaveId})`,
           );
         } else {
-          throw new Error('Mock TCP connection test failed');
+          throw new Error('Modbus TCP connection test failed');
         }
       } catch (error) {
-        this.logger.error(`Failed to connect to mock PLC: ${error.message}`);
+        this.logger.error(`Failed to connect to Modbus TCP: ${error.message}`);
         this.isConnected = false;
         // Retry connection after 5 seconds
         setTimeout(() => this.connect(), 5000);
       }
     } else {
-      // 실제 하드웨어 모드: 시리얼 연결
-      const port = this.configService.get<string>('PLC_PORT', '/dev/ttyUSB0');
-      const baudRate = parseInt(this.configService.get<string>('PLC_BAUD_RATE', '9600'), 10);
-      const slaveId = parseInt(this.configService.get<string>('PLC_SLAVE_ID', '1'), 10);
+      // Modbus RTU connection
+      const device = this.currentConfig.device || '/dev/ttyUSB0';
+      const baudRate = this.currentConfig.baudRate || 9600;
 
       try {
-        await this.client.connectRTUBuffered(port, {
+        await this.client.connectRTUBuffered(device, {
           baudRate,
           dataBits: 8,
           stopBits: 1,
@@ -148,7 +154,7 @@ export class ModbusService implements OnModuleInit, OnModuleDestroy {
         });
 
         this.client.setID(slaveId);
-        this.client.setTimeout(10000); // 타임아웃을 10초로 증가
+        this.client.setTimeout(10000);
 
         // Wait for connection to stabilize
         await new Promise(resolve => setTimeout(resolve, 1000));
@@ -158,13 +164,13 @@ export class ModbusService implements OnModuleInit, OnModuleDestroy {
         if (connectionTest) {
           this.isConnected = true;
           this.logger.log(
-            `Connected to PLC at ${port} (${baudRate} baud, slave ID: ${slaveId})`,
+            `Connected to Modbus RTU at ${device} (${baudRate} baud, slave ID: ${slaveId})`,
           );
         } else {
-          throw new Error('Connection test failed');
+          throw new Error('Modbus RTU connection test failed');
         }
       } catch (error) {
-        this.logger.error(`Failed to connect to PLC: ${error.message}`);
+        this.logger.error(`Failed to connect to Modbus RTU: ${error.message}`);
         this.isConnected = false;
         // Retry connection after 5 seconds
         setTimeout(() => this.connect(), 5000);
@@ -194,19 +200,17 @@ export class ModbusService implements OnModuleInit, OnModuleDestroy {
 
     this.isReading = true;
     try {
-      const mockMode = this.configService.get<string>('MOCK_MODE', 'false');
-      
       let currentState: DeviceState;
-      
-      if (mockMode === 'true') {
-        // Mock 모드: Modbus TCP 서버에서 읽기
+
+      if (this.currentConfig?.protocol === 'modbusTCP') {
+        // Modbus TCP: 서버에서 읽기
         const result = await this.mockTcpClient.readCoils(
           this.STATUS_START_ADDR,
           this.DEVICE_COUNT,
         );
         currentState = this.createStateFromCoils(result.data);
       } else {
-        // 실제 하드웨어 모드: PLC에서 읽기
+        // Modbus RTU: PLC에서 읽기
         const result = await this.client.readCoils(
           this.STATUS_START_ADDR,
           this.DEVICE_COUNT,
@@ -312,10 +316,8 @@ export class ModbusService implements OnModuleInit, OnModuleDestroy {
       throw new Error('PLC is not connected');
     }
 
-    const mockMode = this.configService.get<string>('MOCK_MODE', 'false');
-    
-    if (mockMode === 'true') {
-      // Mock 모드: Modbus TCP 서버에서 읽기
+    if (this.currentConfig?.protocol === 'modbusTCP') {
+      // Modbus TCP: 서버에서 읽기
       return this.executeWithQueue(async () => {
         try {
           const result = await this.mockTcpClient.readCoils(
@@ -324,12 +326,13 @@ export class ModbusService implements OnModuleInit, OnModuleDestroy {
           );
           return this.createStateFromCoils(result.data);
         } catch (error) {
-          this.logger.error(`Failed to read device status from mock server: ${error.message}`);
+          this.logger.error(`Failed to read device status: ${error.message}`);
           throw error;
         }
       });
     }
 
+    // Modbus RTU: PLC에서 읽기
     return this.executeWithQueue(async () => {
       try {
         const result = await this.client.readCoils(
@@ -358,31 +361,30 @@ export class ModbusService implements OnModuleInit, OnModuleDestroy {
     }
 
     const controlAddress = this.CONTROL_START_ADDR + deviceIndex;
-    const mockMode = this.configService.get<string>('MOCK_MODE', 'false');
 
     try {
-      if (mockMode === 'true') {
-        // Mock 모드: Modbus TCP 서버에 쓰기
+      if (this.currentConfig?.protocol === 'modbusTCP') {
+        // Modbus TCP: 서버에 쓰기
         console.log(`[ModbusService] Toggle device command - Device: ${deviceKind}, Address: ${controlAddress}, Sending to TCP server`);
         await this.mockTcpClient.writeCoil(controlAddress, true);
         this.logger.log(
-          `Toggle device ${deviceKind} at address 0x${controlAddress.toString(16)} on mock server`,
+          `Toggle device ${deviceKind} at address 0x${controlAddress.toString(16)}`,
         );
-        
+
         // Send false after 100ms delay
         setTimeout(async () => {
           try {
             await this.mockTcpClient.writeCoil(controlAddress, false);
           } catch (error) {
-            this.logger.error(`Failed to send FALSE to mock server: ${error.message}`);
+            this.logger.error(`Failed to send FALSE: ${error.message}`);
           }
         }, 100);
       } else {
-        // 실제 하드웨어 모드: PLC에 쓰기
+        // Modbus RTU: PLC에 쓰기
         const currentState = await this.getDeviceStatus();
         const currentValue = currentState[deviceKind];
         const newValue = !currentValue;
-        
+
         console.log(`[ModbusService] Toggle device command - Device: ${deviceKind}, Address: ${controlAddress}, Current: ${currentValue}, New: ${newValue}`);
         await this.client.writeCoil(controlAddress, newValue);
         this.logger.log(
@@ -410,16 +412,15 @@ export class ModbusService implements OnModuleInit, OnModuleDestroy {
     }
 
     const controlAddress = this.CONTROL_START_ADDR + deviceIndex;
-    const mockMode = this.configService.get<string>('MOCK_MODE', 'false');
 
     try {
-      if (mockMode === 'true') {
-        // Mock 모드: Modbus TCP 서버에 쓰기
+      if (this.currentConfig?.protocol === 'modbusTCP') {
+        // Modbus TCP: 서버에 쓰기
         console.log(`[ModbusService] Momentary switch command - Device: ${deviceKind}, Address: ${controlAddress}, Sending TRUE to TCP server`);
         await this.mockTcpClient.writeCoil(controlAddress, true);
 
         this.logger.log(
-          `Momentary switch ${deviceKind} at address 0x${controlAddress.toString(16)} on mock server - sent TRUE`,
+          `Momentary switch ${deviceKind} at address 0x${controlAddress.toString(16)} - sent TRUE`,
         );
 
         // Send false after 100ms delay
@@ -428,14 +429,14 @@ export class ModbusService implements OnModuleInit, OnModuleDestroy {
             console.log(`[ModbusService] Momentary switch command - Device: ${deviceKind}, Address: ${controlAddress}, Sending FALSE to TCP server`);
             await this.mockTcpClient.writeCoil(controlAddress, false);
             this.logger.log(
-              `Momentary switch ${deviceKind} at address 0x${controlAddress.toString(16)} on mock server - sent FALSE`,
+              `Momentary switch ${deviceKind} at address 0x${controlAddress.toString(16)} - sent FALSE`,
             );
           } catch (error) {
-            this.logger.error(`Failed to send FALSE to mock server: ${error.message}`);
+            this.logger.error(`Failed to send FALSE: ${error.message}`);
           }
         }, 100);
       } else {
-        // 실제 하드웨어 모드: PLC에 쓰기
+        // Modbus RTU: PLC에 쓰기
         console.log(`[ModbusService] Momentary switch command - Device: ${deviceKind}, Address: ${controlAddress}, Sending TRUE`);
         await this.client.writeCoil(controlAddress, true);
 
@@ -476,18 +477,17 @@ export class ModbusService implements OnModuleInit, OnModuleDestroy {
     }
 
     const controlAddress = this.CONTROL_START_ADDR + deviceIndex;
-    const mockMode = this.configService.get<string>('MOCK_MODE', 'false');
 
     try {
-      if (mockMode === 'true') {
-        // Mock 모드: Modbus TCP 서버에 쓰기
+      if (this.currentConfig?.protocol === 'modbusTCP') {
+        // Modbus TCP: 서버에 쓰기
         console.log(`[ModbusService] Set device command - Device: ${deviceKind}, Address: ${controlAddress}, Value: ${value} to TCP server`);
         await this.mockTcpClient.writeCoil(controlAddress, value);
         this.logger.log(
-          `Set device ${deviceKind} to ${value} at address 0x${controlAddress.toString(16)} on mock server`,
+          `Set device ${deviceKind} to ${value} at address 0x${controlAddress.toString(16)}`,
         );
       } else {
-        // 실제 하드웨어 모드: PLC에 쓰기
+        // Modbus RTU: PLC에 쓰기
         console.log(`[ModbusService] Set device command - Device: ${deviceKind}, Address: ${controlAddress}, Value: ${value}`);
         await this.client.writeCoil(controlAddress, value);
         this.logger.log(
@@ -541,16 +541,14 @@ export class ModbusService implements OnModuleInit, OnModuleDestroy {
       throw new Error('PLC is not connected');
     }
 
-    const mockMode = this.configService.get<string>('MOCK_MODE', 'false');
-    
-    if (mockMode === 'true') {
-      // Mock 모드: Modbus TCP 서버에서 읽기
+    if (this.currentConfig?.protocol === 'modbusTCP') {
+      // Modbus TCP: 서버에서 읽기
       return this.executeWithQueue(async () => {
         try {
           const result = await this.mockTcpClient.readCoils(startAddress, count);
           return result.data;
         } catch (error) {
-          this.logger.error(`Failed to read coils from mock server ${startAddress}-${startAddress + count - 1}: ${error.message}`);
+          this.logger.error(`Failed to read coils ${startAddress}-${startAddress + count - 1}: ${error.message}`);
           throw error;
         }
       });
@@ -575,15 +573,13 @@ export class ModbusService implements OnModuleInit, OnModuleDestroy {
       throw new Error('PLC is not connected');
     }
 
-    const mockMode = this.configService.get<string>('MOCK_MODE', 'false');
-    
-    if (mockMode === 'true') {
-      // Mock 모드: Modbus TCP 서버에 쓰기
+    if (this.currentConfig?.protocol === 'modbusTCP') {
+      // Modbus TCP: 서버에 쓰기
       return this.executeWithQueue(async () => {
         try {
           console.log(`[ModbusService] Writing coil - Address: ${address}, Value: ${value} to TCP server`);
           await this.mockTcpClient.writeCoil(address, value);
-          this.logger.debug(`Wrote coil ${address} = ${value} on mock server`);
+          this.logger.debug(`Wrote coil ${address} = ${value}`);
           console.log(`[ModbusService] Successfully wrote coil - Address: ${address}, Value: ${value}`);
         } catch (error) {
           this.logger.error(`Failed to write coil ${address} on mock server: ${error.message}`);
@@ -615,16 +611,14 @@ export class ModbusService implements OnModuleInit, OnModuleDestroy {
       throw new Error('PLC is not connected');
     }
 
-    const mockMode = this.configService.get<string>('MOCK_MODE', 'false');
-    
-    if (mockMode === 'true') {
-      // Mock 모드: Modbus TCP 서버에서 읽기
+    if (this.currentConfig?.protocol === 'modbusTCP') {
+      // Modbus TCP: 서버에서 읽기
       return this.executeWithQueue(async () => {
         try {
           const result = await this.mockTcpClient.readHoldingRegisters(startAddress, count);
           return result.data;
         } catch (error) {
-          this.logger.error(`Failed to read registers from mock server ${startAddress}-${startAddress + count - 1}: ${error.message}`);
+          this.logger.error(`Failed to read registers ${startAddress}-${startAddress + count - 1}: ${error.message}`);
           throw error;
         }
       });
@@ -649,17 +643,15 @@ export class ModbusService implements OnModuleInit, OnModuleDestroy {
       throw new Error('PLC is not connected');
     }
 
-    const mockMode = this.configService.get<string>('MOCK_MODE', 'false');
-    
-    if (mockMode === 'true') {
-      // Mock 모드: Modbus TCP 서버에 쓰기
+    if (this.currentConfig?.protocol === 'modbusTCP') {
+      // Modbus TCP: 서버에 쓰기
       return this.executeWithQueue(async () => {
         try {
           console.log(`[ModbusService] Writing register - Address: ${address}, Value: ${value} to TCP server`);
           await this.mockTcpClient.writeRegister(address, value);
-          this.logger.debug(`Wrote register ${address} = ${value} on mock server`);
+          this.logger.debug(`Wrote register ${address} = ${value}`);
         } catch (error) {
-          this.logger.error(`Failed to write register ${address} on mock server: ${error.message}`);
+          this.logger.error(`Failed to write register ${address}: ${error.message}`);
           throw error;
         }
       });
@@ -717,6 +709,9 @@ export class ModbusService implements OnModuleInit, OnModuleDestroy {
           this.isConnected = true;
           this.logger.log(`Connected to Modbus TCP at ${host}:${port} (slave ID: ${slaveId})`);
 
+          // Store current config for reconnection attempts
+          this.currentConfig = settings;
+
           // Save connection settings for next startup
           await this.saveConnectionConfig(settings);
 
@@ -756,6 +751,9 @@ export class ModbusService implements OnModuleInit, OnModuleDestroy {
         if (connectionTest) {
           this.isConnected = true;
           this.logger.log(`Connected to PLC at ${device} (${baudRate} baud, slave ID: ${slaveId})`);
+
+          // Store current config for reconnection attempts
+          this.currentConfig = settings;
 
           // Save connection settings for next startup
           await this.saveConnectionConfig(settings);
@@ -849,6 +847,14 @@ export class ModbusService implements OnModuleInit, OnModuleDestroy {
       this.logger.error(`Failed to save config file: ${error.message}`);
       // Don't throw, just log the error
     }
+  }
+
+  /**
+   * Get current PLC connection configuration
+   * Public method for API access
+   */
+  async getCurrentConnectionSettings(): Promise<PLCConnectionConfig> {
+    return this.loadConnectionConfig();
   }
 
 }
