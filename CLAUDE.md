@@ -301,7 +301,7 @@ PLC_SLAVE_ID=1
 NODE_ENV=production
 
 # Windows Host Monitor (optional, for Docker containers to access real Windows host system info)
-HOST_MONITOR_URL=http://host.docker.internal:9100
+HOST_MONITOR_URL=http://host.docker.internal:19100
 ```
 
 **PLC Connection Persistence**:
@@ -341,7 +341,7 @@ host-monitor.js (Node.js native process on Windows)
     ├→ systeminformation (reads Windows WMI)
     └→ os module (native Windows APIs)
             ↓
-    http://host.docker.internal:9100
+    http://host.docker.internal:19100
             ↓
 Docker Container (WSL2/Hyper-V VM)
     └→ NestJS SystemService
@@ -371,7 +371,7 @@ npm run install-service
 
 # 3. Verify installation
 # Open Services (services.msc) → Find "S-Pavilion Host Monitor"
-# Test: curl http://localhost:9100/api/system/info
+# Test: curl http://localhost:19100/api/system/info
 ```
 
 ### Configuration
@@ -381,7 +381,7 @@ The service is automatically configured in `docker-compose.yml`:
 ```yaml
 nest:
   environment:
-    HOST_MONITOR_URL: http://host.docker.internal:9100
+    HOST_MONITOR_URL: http://host.docker.internal:19100
 ```
 
 **Fallback Behavior**:

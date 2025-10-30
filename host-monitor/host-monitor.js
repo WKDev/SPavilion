@@ -3,7 +3,7 @@ const si = require('systeminformation');
 const os = require('os');
 
 const app = express();
-const PORT = process.env.PORT || 9100;
+const PORT = process.env.PORT || 19100;
 
 // Enable CORS for Docker container access
 app.use((req, res, next) => {

@@ -27,7 +27,7 @@
   3. Configuration
 
   - nest/.env.example:14: Added HOST_MONITOR_URL variable with documentation
-  - docker-compose.yml:57: Added environment variable with default value http://host.docker.internal:9100
+  - docker-compose.yml:57: Added environment variable with default value http://host.docker.internal:19100
   - CLAUDE.md:328-416: Added comprehensive documentation section
 
   How It Works
@@ -36,7 +36,7 @@
       ↓
   host-monitor.js (port 9100)
       ↓
-  http://host.docker.internal:9100/api/system/info
+  http://host.docker.internal:19100/api/system/info
       ↓
   NestJS Docker Container
       ↓
@@ -53,5 +53,5 @@
   # Right-click PowerShell/CMD → "Run as administrator"
   npm run install-service
   3. Verify it's running:
-  curl http://localhost:9100/api/system/info
+  curl http://localhost:19100/api/system/info
   4. Done! The service auto-starts on Windows boot. NestJS will automatically use host metrics.

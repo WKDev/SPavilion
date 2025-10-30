@@ -10,7 +10,7 @@ const svc = new Service({
   env: [
     {
       name: 'PORT',
-      value: '9100',
+      value: '19100',
     },
   ],
 });
@@ -28,8 +28,8 @@ svc.on('start', () => {
   console.log('Service Details:');
   console.log(`  Name: ${svc.name}`);
   console.log(`  Status: Running`);
-  console.log(`  Port: 9100`);
-  console.log(`  Endpoint: http://localhost:9100/api/system/info`);
+  console.log(`  Port: 19100`);
+  console.log(`  Endpoint: http://localhost:19100/api/system/info`);
   console.log('');
   console.log('To uninstall: npm run uninstall-service');
   console.log('To view service: Open "Services" app (services.msc)');

@@ -53,8 +53,9 @@ services:
       TZ: Asia/Seoul
       # Platform detection
       PLATFORM: ${PLATFORM:-windows}  # linux or windows
+      
       # Windows Host Monitor (optional, for accessing real Windows host system info)
-      HOST_MONITOR_URL: ${HOST_MONITOR_URL:-http://host.docker.internal:9100}
+      HOST_MONITOR_URL: ${HOST_MONITOR_URL:-http://host.docker.internal:19100}
     depends_on:
       - postgres
     ports:

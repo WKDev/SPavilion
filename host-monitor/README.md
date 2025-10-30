@@ -68,8 +68,8 @@ The service will:
 
 2. **Test HTTP endpoint**:
    ```bash
-   curl http://localhost:9100/health
-   curl http://localhost:9100/api/system/info
+   curl http://localhost:19100/health
+   curl http://localhost:19100/api/system/info
    ```
 
    Expected response:
@@ -115,9 +115,9 @@ Then reinstall the service.
 
 The service binds to `0.0.0.0`, making it accessible from Docker containers via:
 
-- **Docker Desktop (WSL2)**: `http://host.docker.internal:9100`
-- **Docker Desktop (Hyper-V)**: `http://host.docker.internal:9100`
-- **Custom bridge network**: Use Windows host IP (e.g., `http://192.168.1.100:9100`)
+- **Docker Desktop (WSL2)**: `http://host.docker.internal:19100`
+- **Docker Desktop (Hyper-V)**: `http://host.docker.internal:19100`
+- **Custom bridge network**: Use Windows host IP (e.g., `http://192.168.1.100:19100`)
 
 ## API Endpoints
 
@@ -212,11 +212,11 @@ This stops and removes the service from Windows Services.
 
 ### Can't access from Docker container
 
-**Issue**: `http://localhost:9100` works on Windows but not from Docker
+**Issue**: `http://localhost:19100` works on Windows but not from Docker
 
 **Solutions**:
-1. Use `http://host.docker.internal:9100` (Docker Desktop feature)
-2. Find Windows host IP: `ipconfig` → Use IPv4 address (e.g., `http://192.168.1.100:9100`)
+1. Use `http://host.docker.internal:19100` (Docker Desktop feature)
+2. Find Windows host IP: `ipconfig` → Use IPv4 address (e.g., `http://192.168.1.100:19100`)
 3. Check Windows Firewall: Allow inbound on port 9100
 
 ### Wrong metrics displayed
@@ -225,8 +225,8 @@ This stops and removes the service from Windows Services.
 
 **Check**:
 1. Verify service is running: `services.msc`
-2. Test endpoint: `curl http://localhost:9100/api/system/info`
-3. Check NestJS environment variable: `HOST_MONITOR_URL=http://host.docker.internal:9100`
+2. Test endpoint: `curl http://localhost:19100/api/system/info`
+3. Check NestJS environment variable: `HOST_MONITOR_URL=http://host.docker.internal:19100`
 4. Check NestJS logs for connection errors
 
 ## Development Mode
@@ -239,7 +239,7 @@ cd host-monitor
 npm start
 
 # Terminal 2: Test endpoints
-curl http://localhost:9100/api/system/info
+curl http://localhost:19100/api/system/info
 ```
 
 Press `Ctrl+C` to stop.
@@ -250,14 +250,14 @@ The NestJS backend (`nest/src/system/system.service.ts`) should be configured to
 
 1. Set environment variable in `.env`:
    ```env
-   HOST_MONITOR_URL=http://host.docker.internal:9100
+   HOST_MONITOR_URL=http://host.docker.internal:19100
    ```
 
 2. In `docker-compose.yml`:
    ```yaml
    nest:
      environment:
-       - HOST_MONITOR_URL=http://host.docker.internal:9100
+       - HOST_MONITOR_URL=http://host.docker.internal:19100
    ```
 
 3. SystemService will automatically:
@@ -274,7 +274,7 @@ host-monitor.js (Node.js native process)
     ├→ os module (native Windows APIs)
     └→ Express HTTP server (port 9100)
             ↓
-    http://host.docker.internal:9100
+    http://host.docker.internal:19100
             ↓
 Docker Container (WSL2 VM)
     └→ NestJS SystemService
