@@ -8,17 +8,9 @@ async function bootstrap() {
   const logger = new Logger('Bootstrap');
   const app = await NestFactory.create(AppModule);
 
-  // Enable CORS for development (Next.js frontend on different port)
-  // 개발 환경: Next.js는 3001, 이전 React는 5173
-  // 프로덕션: 프록시를 통해 동일 origin이지만, 개발 환경을 위해 CORS 유지
-  app.enableCors({
-    origin: [
-      'http://localhost:3000', // NestJS (프록시 서버)
-      'http://localhost:3001', // Next.js 직접 접근 (개발용)
-      'http://localhost:5173', // Vite (이전 React)
-    ],
-    credentials: true,
-  });
+  // CORS 비활성화: NestJS(3000)와 Next.js(3001) 모두 localhost에서 동작하므로 불필요
+  // 프록시를 통해 동일 origin으로 처리되므로 CORS 헤더가 필요 없음
+  // app.enableCors();
 
   // Swagger 설정
   const config = new DocumentBuilder()
