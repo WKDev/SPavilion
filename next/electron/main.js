@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, screen, ipcMain } = require('electron');
+const { app, BrowserWindow, Menu, screen, ipcMain, session } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -114,7 +114,10 @@ function createWindow() {
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
-      contextIsolation: true
+      contextIsolation: true,
+      webSecurity: false, // WebRTC를 HTTP에서 사용하기 위해 필요
+      allowRunningInsecureContent: true, // HTTP 콘텐츠 허용
+      experimentalFeatures: true // WebRTC 실험적 기능 활성화
     },
     autoHideMenuBar: true,
     show: false
@@ -154,9 +157,9 @@ function createWindow() {
   // 이렇게 하면 개발/프로덕션 모두 상대 경로 /api 사용 가능
   win.loadURL('http://localhost:3000');
   
-  // 개발 모드에서 개발자 도구 자동 열기 (선택사항)
+  // 개발 모드에서 개발자 도구 자동 열기 (WebRTC 디버깅용)
   if (isDev) {
-    // win.webContents.openDevTools();
+    win.webContents.openDevTools();
   }
   
   return win;
@@ -229,8 +232,39 @@ function setAutoLaunch(enabled) {
   }
 }
 
+// WebRTC 및 네트워크 관련 명령줄 스위치 설정
+app.commandLine.appendSwitch('disable-features', 'OutOfBlinkCors');
+app.commandLine.appendSwitch('disable-web-security');
+app.commandLine.appendSwitch('allow-running-insecure-content');
+app.commandLine.appendSwitch('ignore-certificate-errors');
+app.commandLine.appendSwitch('allow-insecure-localhost');
+// WebRTC UDP 연결 허용
+app.commandLine.appendSwitch('enable-webrtc-pipewire-capturer');
+
 // 앱이 준비되면
 app.whenReady().then(() => {
+  // WebRTC 권한 설정
+  session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
+    // WebRTC 관련 권한 허용
+    if (permission === 'media' || permission === 'camera' || permission === 'microphone') {
+      callback(true);
+    } else {
+      callback(false);
+    }
+  });
+
+  // CORS 및 WebRTC 관련 헤더 설정
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Access-Control-Allow-Origin': ['*'],
+        'Access-Control-Allow-Methods': ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+        'Access-Control-Allow-Headers': ['Content-Type', 'Authorization']
+      }
+    });
+  });
+
   // 초기 자동 실행 설정 로드 및 적용
   const autoLaunchEnabled = loadAutoLaunchSetting();
   if (autoLaunchEnabled) {

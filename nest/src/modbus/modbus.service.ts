@@ -75,6 +75,31 @@ export class ModbusService implements OnModuleInit, OnModuleDestroy {
   private readonly CONTROL_START_ADDR = 0x10; // Write addresses 0x10-0x17
   private readonly DEVICE_COUNT = 8;
 
+  // Device to Status Coil Address mapping (for reading device status)
+  private readonly STATUS_COIL_ADDRESS_MAP: Record<DeviceKind, number> = {
+    [DeviceKind.heat]: 0x00,
+    [DeviceKind.fan]: 0x01,
+    [DeviceKind.btsp]: 0x03,
+    [DeviceKind.light_red]: 0x04,
+    [DeviceKind.light_green]: 0x05,
+    [DeviceKind.light_blue]: 0x06,
+    [DeviceKind.light_white]: 0x07,
+    [DeviceKind.display]: 0x08,
+  };
+
+  // Device to Control Coil Address mapping (for writing device control)
+  private readonly CONTROL_COIL_ADDRESS_MAP: Record<DeviceKind, number> = {
+    [DeviceKind.heat]: 0x10,
+    [DeviceKind.fan]: 0x11,
+    [DeviceKind.btsp]: 0x13,
+    [DeviceKind.light_red]: 0x14,
+    [DeviceKind.light_green]: 0x15,
+    [DeviceKind.light_blue]: 0x16,
+    [DeviceKind.light_white]: 0x17,
+    [DeviceKind.display]: 0x18,
+  };
+
+  // Device order for iteration (maintained for backward compatibility)
   private readonly deviceOrder: DeviceKind[] = [
     DeviceKind.heat,
     DeviceKind.fan,
@@ -85,6 +110,28 @@ export class ModbusService implements OnModuleInit, OnModuleDestroy {
     DeviceKind.light_white,
     DeviceKind.display,
   ];
+
+  /**
+   * Get status coil address for a device
+   */
+  private getStatusCoilAddress(deviceKind: DeviceKind): number {
+    const address = this.STATUS_COIL_ADDRESS_MAP[deviceKind];
+    if (address === undefined) {
+      throw new Error(`Invalid device kind: ${deviceKind}`);
+    }
+    return address;
+  }
+
+  /**
+   * Get control coil address for a device
+   */
+  private getControlCoilAddress(deviceKind: DeviceKind): number {
+    const address = this.CONTROL_COIL_ADDRESS_MAP[deviceKind];
+    if (address === undefined) {
+      throw new Error(`Invalid device kind: ${deviceKind}`);
+    }
+    return address;
+  }
 
   constructor(
     private readonly configService: ConfigService,
@@ -273,15 +320,17 @@ export class ModbusService implements OnModuleInit, OnModuleDestroy {
   }
 
   private createStateFromCoils(coils: boolean[]): DeviceState {
+    // readCoils returns an array starting from STATUS_START_ADDR (0x00)
+    // So we need to calculate the index: address - STATUS_START_ADDR
     return {
-      heat: coils[0] || false,
-      fan: coils[1] || false,
-      btsp: coils[2] || false,
-      light_red: coils[3] || false,
-      light_green: coils[4] || false,
-      light_blue: coils[5] || false,
-      light_white: coils[6] || false,
-      display: coils[7] || false,
+      heat: coils[this.getStatusCoilAddress(DeviceKind.heat) - this.STATUS_START_ADDR] || false,
+      fan: coils[this.getStatusCoilAddress(DeviceKind.fan) - this.STATUS_START_ADDR] || false,
+      btsp: coils[this.getStatusCoilAddress(DeviceKind.btsp) - this.STATUS_START_ADDR] || false,
+      light_red: coils[this.getStatusCoilAddress(DeviceKind.light_red) - this.STATUS_START_ADDR] || false,
+      light_green: coils[this.getStatusCoilAddress(DeviceKind.light_green) - this.STATUS_START_ADDR] || false,
+      light_blue: coils[this.getStatusCoilAddress(DeviceKind.light_blue) - this.STATUS_START_ADDR] || false,
+      light_white: coils[this.getStatusCoilAddress(DeviceKind.light_white) - this.STATUS_START_ADDR] || false,
+      display: coils[this.getStatusCoilAddress(DeviceKind.display) - this.STATUS_START_ADDR] || false,
     };
   }
 
@@ -494,12 +543,7 @@ export class ModbusService implements OnModuleInit, OnModuleDestroy {
       throw new Error('PLC is not connected');
     }
 
-    const deviceIndex = this.deviceOrder.indexOf(deviceKind);
-    if (deviceIndex === -1) {
-      throw new Error(`Invalid device kind: ${deviceKind}`);
-    }
-
-    const controlAddress = this.CONTROL_START_ADDR + deviceIndex;
+    const controlAddress = this.getControlCoilAddress(deviceKind);
 
     // This entire read-modify-write operation is now atomic within the queue
     // Set priority=true to process this write request before pending reads
@@ -560,12 +604,7 @@ export class ModbusService implements OnModuleInit, OnModuleDestroy {
       throw new Error('PLC is not connected');
     }
 
-    const deviceIndex = this.deviceOrder.indexOf(deviceKind);
-    if (deviceIndex === -1) {
-      throw new Error(`Invalid device kind: ${deviceKind}`);
-    }
-
-    const controlAddress = this.CONTROL_START_ADDR + deviceIndex;
+    const controlAddress = this.getControlCoilAddress(deviceKind);
 
     // The entire operation is queued with high priority
     return this.executeWithQueue(async () => {
@@ -611,12 +650,7 @@ export class ModbusService implements OnModuleInit, OnModuleDestroy {
       throw new Error('PLC is not connected');
     }
 
-    const deviceIndex = this.deviceOrder.indexOf(deviceKind);
-    if (deviceIndex === -1) {
-      throw new Error(`Invalid device kind: ${deviceKind}`);
-    }
-
-    const controlAddress = this.CONTROL_START_ADDR + deviceIndex;
+    const controlAddress = this.getControlCoilAddress(deviceKind);
 
     // The write operation is queued with high priority
     return this.executeWithQueue(async () => {

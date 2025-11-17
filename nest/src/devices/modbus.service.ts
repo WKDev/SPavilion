@@ -17,12 +17,12 @@ export class ModbusService implements OnModuleInit, OnModuleDestroy {
   private readonly registerMap: DeviceRegisterMap = {
     heat: 0,
     fan: 1,
-    btsp: 2,
-    'light-red': 3,
-    'light-green': 4,
-    'light-blue': 5,
-    'light-white': 6,
-    display: 7,
+    btsp: 3,
+    'light-red': 4,
+    'light-green': 5,
+    'light-blue': 6,
+    'light-white': 7,
+    display: 8,
   };
 
   constructor(private readonly configService: ConfigService) {
