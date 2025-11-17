@@ -53,7 +53,7 @@
     },
     "nsis": {
       "oneClick": true,
-      "allowToChangeInstallationDirectory": true,
+      "allowToChangeInstallationDirectory": false,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "installerIcon": "electron/favicon.ico",

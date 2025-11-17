@@ -23,10 +23,12 @@
 	<stoptimeout>30sec</stoptimeout>
 	<env name="NODE_ENV" value="production"/>
 	<env name="PORT" value="3000"/>
+	<env name="ENABLE_PROXY" value="true"/>
+	<env name="NEXTJS_URL" value="http://localhost:3001"/>
 	<serviceaccount>
 		<domain>DESKTOP-28OGL4E</domain>
 		<user>LocalSystem</user>
 		<password></password>
 	</serviceaccount>
-	<workingdirectory>C:\Users\user\SPavilion\nest</workingdirectory>
+	<workingdirectory>C:\Program Files\nodejs</workingdirectory>
 </service>

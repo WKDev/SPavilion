@@ -653,7 +653,7 @@ def send_bbox_to_api(bboxes: list[dict]):
             timeout=1.0  # Reduced timeout to 1 second
         )
 
-        if response.status_code == 201:
+        if 200 <= response.status_code < 300:  # Accept any 2xx status code as success
             print(f"Bbox data sent successfully (frame {frame_count})")
         else:
             print(f"API response error: {response.status_code}")
@@ -685,7 +685,7 @@ def send_device_control(device: str, action: str):
             json=payload,
             timeout=1.0  # Reduced timeout to 1 second
         )
-        if response.status_code == 200:
+        if 200 <= response.status_code < 300:  # Accept any 2xx status code as success
             print(f"Successfully sent command '{action}' to device '{device}'")
         else:
             print(f"API response error for device control: {response.status_code} - {response.text}")
