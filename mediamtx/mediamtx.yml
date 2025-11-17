@@ -390,6 +390,9 @@ webrtcLocalUDPAddress: :8189
 # Address of a local TCP listener that will receive connections.
 # This is disabled by default since TCP is less efficient than UDP and
 # introduces a progressive delay when network is congested.
+# NOTE: If UDP connections fail (firewall/NAT issues), enable TCP by setting:
+# webrtcLocalTCPAddress: :8188
+# This provides a fallback transport method for WebRTC connections.
 webrtcLocalTCPAddress: ''
 # WebRTC clients need to know the IP of the server.
 # Gather IPs from interfaces and send them to clients.
@@ -410,11 +413,13 @@ webrtcICEServers2: []
   # password: ''
   # clientOnly: false
 # Time to wait for the WebRTC handshake to complete.
-webrtcHandshakeTimeout: 10s
+# Electron 환경에서는 더 긴 타임아웃이 필요할 수 있음
+webrtcHandshakeTimeout: 30s
 # Maximum time to gather video tracks.
-webrtcTrackGatherTimeout: 2s
+webrtcTrackGatherTimeout: 5s
 # The maximum time to gather STUN candidates.
-webrtcSTUNGatherTimeout: 5s
+# Electron에서 ICE candidate 수집이 더 오래 걸릴 수 있음
+webrtcSTUNGatherTimeout: 15s
 
 ###############################################
 # Global settings -> SRT server

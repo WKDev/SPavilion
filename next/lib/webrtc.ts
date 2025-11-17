@@ -18,15 +18,20 @@ export class WebRTCManager {
     console.log("[v0] Initializing WebRTC connection to:", WEBRTC_URL)
 
     // Create peer connection
-    // UDP와 TCP 모두 허용 (기본값)
+    // Electron 환경에서 브라우저와 동일하게 작동하도록 설정
     this.peerConnection = new RTCPeerConnection({
       iceServers: [
         { urls: "stun:stun.l.google.com:19302" },
         { urls: "stun:stun1.l.google.com:19302" }
       ],
       // 'all'은 UDP와 TCP 모두 허용 (기본값)
+      // Electron에서는 명시적으로 설정하는 것이 중요
       iceTransportPolicy: 'all',
-      iceCandidatePoolSize: 0
+      // ICE candidate pool 크기 설정 (Electron에서 더 안정적)
+      iceCandidatePoolSize: 10,
+      // Electron에서 네트워크 인터페이스 선택 개선
+      bundlePolicy: 'max-bundle',
+      rtcpMuxPolicy: 'require'
     })
 
     // Handle incoming tracks
@@ -42,14 +47,22 @@ export class WebRTCManager {
     }
 
     // Handle ICE candidates
+    // 이 핸들러는 나중에 offer 전송 전에 재설정될 수 있으므로 참조 저장
     this.peerConnection.onicecandidate = (event) => {
       if (event.candidate) {
         const candidate = event.candidate.candidate
         const isTCP = candidate.includes('tcp')
         const isUDP = candidate.includes('udp')
-        console.log(`[v0] New ICE candidate: ${isTCP ? 'TCP' : isUDP ? 'UDP' : 'OTHER'}`, candidate)
+        
+        // Parse candidate type
+        let candidateType = 'unknown'
+        if (candidate.includes('typ host')) candidateType = 'host'
+        else if (candidate.includes('typ srflx')) candidateType = 'srflx (STUN)'
+        else if (candidate.includes('typ relay')) candidateType = 'relay (TURN)'
+        
+        console.log(`[v0] New ICE candidate: ${isTCP ? 'TCP' : isUDP ? 'UDP' : 'OTHER'} [${candidateType}]`, candidate)
       } else {
-        console.log("[v0] ICE candidate gathering completed")
+        console.log("[v0] ICE candidate gathering completed - null candidate received")
       }
     }
 
@@ -58,27 +71,39 @@ export class WebRTCManager {
     const MAX_ICE_RESTARTS = 2
     this.peerConnection.oniceconnectionstatechange = () => {
       const iceState = this.peerConnection?.iceConnectionState
-      console.log("[v0] ICE connection state:", iceState)
+      const connectionState = this.peerConnection?.connectionState
+      console.log(`[v0] ICE connection state: ${iceState}, Connection state: ${connectionState}`)
       
-      if (iceState === "failed") {
-        if (iceRestartAttempts < MAX_ICE_RESTARTS) {
-          iceRestartAttempts++
-          console.error(`[v0] ICE connection failed, attempting restart ${iceRestartAttempts}/${MAX_ICE_RESTARTS}...`)
-          // Try to restart ICE - this will trigger new candidate gathering
-          try {
-            this.peerConnection?.restartIce()
-          } catch (error) {
-            console.error("[v0] Failed to restart ICE:", error)
+      if (iceState === "failed" || iceState === "disconnected") {
+        // disconnected 상태에서도 일정 시간 후 failed로 전환될 수 있으므로 모니터링
+        if (iceState === "failed") {
+          if (iceRestartAttempts < MAX_ICE_RESTARTS) {
+            iceRestartAttempts++
+            console.error(`[v0] ICE connection failed, attempting restart ${iceRestartAttempts}/${MAX_ICE_RESTARTS}...`)
+            // Try to restart ICE - this will trigger new candidate gathering
+            try {
+              this.peerConnection?.restartIce()
+              // Restart ICE 후 새로운 offer 생성 필요
+              console.log("[v0] ICE restarted, new candidates will be gathered")
+            } catch (error) {
+              console.error("[v0] Failed to restart ICE:", error)
+            }
+          } else {
+            console.error("[v0] ICE connection failed after multiple restart attempts")
+            console.error("[v0] This may be due to:")
+            console.error("  - UDP/TCP ports blocked by firewall/network")
+            console.error("  - MediaMTX TCP WebRTC not enabled (check webrtcLocalTCPAddress)")
+            console.error("  - Network connectivity issues")
+            console.error("  - NAT traversal failure (TURN server may be needed)")
           }
-        } else {
-          console.error("[v0] ICE connection failed after multiple restart attempts")
-          console.error("[v0] This may be due to:")
-          console.error("  - UDP ports blocked by firewall/network")
-          console.error("  - MediaMTX TCP WebRTC not enabled")
-          console.error("  - Network connectivity issues")
+        } else if (iceState === "disconnected") {
+          console.warn("[v0] ICE connection disconnected - may recover or fail soon")
         }
       } else if (iceState === "connected" || iceState === "completed") {
         iceRestartAttempts = 0 // Reset on successful connection
+        console.log("[v0] ICE connection established successfully!")
+      } else if (iceState === "checking") {
+        console.log("[v0] ICE connection checking - attempting to establish connection...")
       }
     }
 
@@ -119,6 +144,78 @@ export class WebRTCManager {
       await this.peerConnection.setLocalDescription(offer)
       console.log("[v0] Local description set, SDP length:", offer.sdp.length)
 
+      // Wait for ICE candidate gathering to complete before sending offer
+      // This ensures all candidates are included in the SDP
+      // Electron에서는 candidate 수집이 더 오래 걸릴 수 있으므로 타임아웃을 늘림
+      await new Promise<void>((resolve) => {
+        // null candidate 이벤트 확인 (추가 안전장치)
+        let nullCandidateReceived = false
+        const originalOnIceCandidate = this.peerConnection.onicecandidate
+        const enhancedOnIceCandidate = (event: RTCPeerConnectionIceEvent) => {
+          // 원래 핸들러 호출
+          if (originalOnIceCandidate) {
+            originalOnIceCandidate.call(this.peerConnection, event)
+          }
+          
+          // null candidate 확인
+          if (!event.candidate && !nullCandidateReceived) {
+            nullCandidateReceived = true
+            console.log("[v0] Null candidate received - ICE gathering may be complete")
+            // null candidate가 와도 완전히 완료되지 않을 수 있으므로
+            // icegatheringstatechange를 계속 기다림
+          }
+        }
+        
+        // 상태 변화를 기다림
+        const onGatheringStateChange = () => {
+          const state = this.peerConnection?.iceGatheringState
+          console.log(`[v0] ICE gathering state changed: ${state}`)
+          if (state === 'complete') {
+            clearTimeout(timeout)
+            cleanup()
+            console.log("[v0] ICE candidate gathering completed before sending offer")
+            resolve()
+          }
+        }
+        
+        // Cleanup 함수
+        const cleanup = () => {
+          this.peerConnection?.removeEventListener('icegatheringstatechange', onGatheringStateChange)
+          // 원래 핸들러로 복원
+          if (originalOnIceCandidate) {
+            this.peerConnection.onicecandidate = originalOnIceCandidate
+          }
+        }
+        
+        const timeout = setTimeout(() => {
+          const currentState = this.peerConnection?.iceGatheringState
+          console.warn(`[v0] ICE gathering timeout after 10s, current state: ${currentState}, proceeding anyway...`)
+          console.warn("[v0] Some candidates may be missing, but connection will be attempted")
+          cleanup()
+          resolve()
+        }, 10000) // Electron에서는 10초로 증가
+
+        // 이미 완료된 경우 즉시 resolve
+        if (this.peerConnection?.iceGatheringState === 'complete') {
+          clearTimeout(timeout)
+          console.log("[v0] ICE candidate gathering already completed")
+          resolve()
+          return
+        }
+
+        // 이벤트 리스너 등록
+        this.peerConnection.addEventListener('icegatheringstatechange', onGatheringStateChange)
+        this.peerConnection.onicecandidate = enhancedOnIceCandidate
+      })
+
+      // Get updated SDP with all ICE candidates
+      const updatedOffer = this.peerConnection.localDescription
+      if (!updatedOffer) {
+        throw new Error("Local description not set")
+      }
+
+      console.log("[v0] Sending offer with all ICE candidates, SDP length:", updatedOffer.sdp.length)
+
       // Send offer to MediaMTX and get answer
       const whepUrl = `${WEBRTC_URL}/camera/whep`
       console.log("[v0] Sending offer to:", whepUrl)
@@ -128,7 +225,7 @@ export class WebRTCManager {
         headers: {
           "Content-Type": "application/sdp",
         },
-        body: offer.sdp,
+        body: updatedOffer.sdp,
       })
 
       console.log("[v0] Response status:", response.status, response.statusText)

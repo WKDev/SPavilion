@@ -1,6 +1,7 @@
 const { app, BrowserWindow, Menu, screen, ipcMain, session } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const { exec } = require('child_process');
 
 // 창 설정 파일 경로
 const WINDOW_STATE_FILE = path.join(app.getPath('userData'), 'window-state.json');
@@ -117,7 +118,10 @@ function createWindow() {
       contextIsolation: true,
       webSecurity: false, // WebRTC를 HTTP에서 사용하기 위해 필요
       allowRunningInsecureContent: true, // HTTP 콘텐츠 허용
-      experimentalFeatures: true // WebRTC 실험적 기능 활성화
+      // Electron 33에서는 experimentalFeatures가 더 이상 필요하지 않음
+      // WebRTC는 기본적으로 활성화되어 있음
+      // Electron에서 WebRTC 네트워크 스택 활성화
+      enableBlinkFeatures: 'WebRTC',
     },
     autoHideMenuBar: true,
     show: false
@@ -233,36 +237,129 @@ function setAutoLaunch(enabled) {
 }
 
 // WebRTC 및 네트워크 관련 명령줄 스위치 설정
-app.commandLine.appendSwitch('disable-features', 'OutOfBlinkCors');
+// HTTP 환경에서 WebRTC 사용을 위한 보안 설정 완화
 app.commandLine.appendSwitch('disable-web-security');
 app.commandLine.appendSwitch('allow-running-insecure-content');
 app.commandLine.appendSwitch('ignore-certificate-errors');
 app.commandLine.appendSwitch('allow-insecure-localhost');
-// WebRTC UDP 연결 허용
-app.commandLine.appendSwitch('enable-webrtc-pipewire-capturer');
+
+// WebRTC 관련 설정 (Electron 전용)
+// WebRTC 명시적 활성화
+app.commandLine.appendSwitch('enable-webrtc');
+// WebRTC ICE 후보 수집 개선
+app.commandLine.appendSwitch('enable-features', 'WebRTC-H264WithOpenH264FFmpeg');
+// WebRTC IP 처리 정책 설정 (내부망 통신 허용)
+// 'default_public_interface_only' 대신 'default'를 사용하여 모든 인터페이스 허용
+app.commandLine.appendSwitch('force-webrtc-ip-handling-policy', 'default');
+// UDP 포트 범위 설정 (방화벽 문제 해결)
+app.commandLine.appendSwitch('webrtc-stun-probe-trial-parameter', '1');
+// 내부망 통신을 위한 네트워크 정책 설정
+app.commandLine.appendSwitch('disable-features', 'VizDisplayCompositor');
+// WebRTC 로깅 활성화 (디버깅용)
+app.commandLine.appendSwitch('enable-logging');
+app.commandLine.appendSwitch('vmodule', 'webrtc*=1');
+
+// Windows 방화벽 규칙 추가 함수 (UDP 통신 허용)
+function addFirewallRule() {
+  if (process.platform !== 'win32') {
+    return; // Windows가 아니면 실행하지 않음
+  }
+
+  try {
+    const appPath = process.execPath;
+    const appName = app.getName();
+    const isDev = !app.isPackaged;
+    
+    // 개발 모드에서는 Electron 실행 파일에 대한 규칙 추가
+    // 프로덕션 모드에서는 패키지된 앱 경로 사용
+    const targetPath = isDev ? appPath : appPath;
+    
+    console.log(`[Firewall] Attempting to add firewall rules for: ${targetPath}`);
+    console.log(`[Firewall] App name: ${appName}, Is packaged: ${!isDev}`);
+    
+    // UDP 인바운드/아웃바운드 규칙 추가
+    const rules = [
+      { name: `${appName} UDP Inbound`, dir: 'in', protocol: 'UDP' },
+      { name: `${appName} UDP Outbound`, dir: 'out', protocol: 'UDP' },
+      { name: `${appName} TCP Inbound`, dir: 'in', protocol: 'TCP' },
+      { name: `${appName} TCP Outbound`, dir: 'out', protocol: 'TCP' }
+    ];
+    
+    rules.forEach((rule) => {
+      const checkCmd = `netsh advfirewall firewall show rule name="${rule.name}"`;
+      const addCmd = `netsh advfirewall firewall add rule name="${rule.name}" dir=${rule.dir} action=allow program="${targetPath}" protocol=${rule.protocol} enable=yes`;
+      
+      exec(checkCmd, (error) => {
+        if (error) {
+          // 규칙이 없으면 추가 시도
+          exec(addCmd, (err, stdout, stderr) => {
+            if (err) {
+              console.warn(`[Firewall] Failed to add ${rule.name} (may require admin):`, err.message);
+              console.warn(`[Firewall] Command: ${addCmd}`);
+              console.warn(`[Firewall] To add manually, run PowerShell as Administrator and execute:`);
+              console.warn(`[Firewall] ${addCmd}`);
+            } else {
+              console.log(`[Firewall] ✓ ${rule.name} added successfully`);
+            }
+          });
+        } else {
+          console.log(`[Firewall] ✓ ${rule.name} already exists`);
+        }
+      });
+    });
+    
+    // 개발 모드에서 추가 안내
+    if (isDev) {
+      console.log('\n[Firewall] ============================================');
+      console.log('[Firewall] Development Mode - Firewall Rules');
+      console.log('[Firewall] ============================================');
+      console.log('[Firewall] If firewall rules failed to add, run PowerShell as Administrator:');
+      console.log(`[Firewall] netsh advfirewall firewall add rule name="${appName} UDP Inbound" dir=in action=allow program="${targetPath}" protocol=UDP enable=yes`);
+      console.log(`[Firewall] netsh advfirewall firewall add rule name="${appName} UDP Outbound" dir=out action=allow program="${targetPath}" protocol=UDP enable=yes`);
+      console.log(`[Firewall] netsh advfirewall firewall add rule name="${appName} TCP Inbound" dir=in action=allow program="${targetPath}" protocol=TCP enable=yes`);
+      console.log(`[Firewall] netsh advfirewall firewall add rule name="${appName} TCP Outbound" dir=out action=allow program="${targetPath}" protocol=TCP enable=yes`);
+      console.log('[Firewall] ============================================\n');
+    }
+  } catch (error) {
+    console.warn('[Firewall] Failed to configure firewall rules:', error.message);
+    console.warn('[Firewall] You may need to manually add firewall rules or run as administrator');
+  }
+}
 
 // 앱이 준비되면
 app.whenReady().then(() => {
+  // Windows 방화벽 규칙 추가 시도 (관리자 권한이 필요할 수 있음)
+  addFirewallRule();
+  
   // WebRTC 권한 설정
   session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
     // WebRTC 관련 권한 허용
-    if (permission === 'media' || permission === 'camera' || permission === 'microphone') {
+    const allowedPermissions = ['media', 'camera', 'microphone', 'display-capture'];
+    if (allowedPermissions.includes(permission)) {
+      console.log(`[WebRTC] Permission granted: ${permission}`);
       callback(true);
     } else {
+      console.log(`[WebRTC] Permission denied: ${permission}`);
       callback(false);
     }
   });
 
   // CORS 및 WebRTC 관련 헤더 설정
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
-    callback({
-      responseHeaders: {
-        ...details.responseHeaders,
-        'Access-Control-Allow-Origin': ['*'],
-        'Access-Control-Allow-Methods': ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-        'Access-Control-Allow-Headers': ['Content-Type', 'Authorization']
-      }
-    });
+    const responseHeaders = {
+      ...details.responseHeaders,
+      'Access-Control-Allow-Origin': ['*'],
+      'Access-Control-Allow-Methods': ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+      'Access-Control-Allow-Headers': ['Content-Type', 'Authorization', 'Accept'],
+      'Access-Control-Expose-Headers': ['Content-Length', 'Content-Type']
+    };
+    
+    // WebRTC 관련 엔드포인트에 대한 추가 헤더
+    if (details.url.includes('/whep') || details.url.includes('/webrtc')) {
+      responseHeaders['Access-Control-Allow-Credentials'] = ['true'];
+    }
+    
+    callback({ responseHeaders });
   });
 
   // 초기 자동 실행 설정 로드 및 적용
