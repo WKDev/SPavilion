@@ -54,13 +54,19 @@ video_fps = 29.97  # Default FPS for mock video
 class ThreadedCamera:
     """
     A class to read frames from a camera in a separate thread to prevent
-    frame lag due to slow processing.
+    frame lag due to slow processing. Includes automatic reconnection logic.
     """
     def __init__(self, src=0):
+        self.src = src
         self.stream = cv2.VideoCapture(src)
         self.grabbed, self.frame = self.stream.read()
         self.running = False
         self.lock = threading.Lock()
+        self.consecutive_failures = 0
+        self.max_consecutive_failures = 30  # Reconnect after 30 consecutive failures (~3 seconds at 10fps)
+        self.last_successful_frame_time = time.time()
+        self.frame_timestamp = time.time()  # Timestamp of the current frame
+        self.frame_sequence = 0  # Sequence number to track frame freshness
 
     def start(self):
         """Start the thread to read frames from the video stream."""
@@ -73,42 +79,116 @@ class ThreadedCamera:
         self.thread.start()
         return self
 
+    def _reconnect(self):
+        """Attempt to reconnect to the camera"""
+        print(f"Attempting to reconnect camera (src={self.src})...")
+        try:
+            # Release old stream
+            if self.stream is not None:
+                self.stream.release()
+            
+            # Wait a bit before reconnecting
+            time.sleep(1.0)
+            
+            # Try to reconnect
+            self.stream = cv2.VideoCapture(self.src)
+            if self.stream.isOpened():
+                # Test read
+                test_grabbed, test_frame = self.stream.read()
+                if test_grabbed and test_frame is not None:
+                    print(f"Camera reconnected successfully (src={self.src})")
+                    self.consecutive_failures = 0
+                    self.last_successful_frame_time = time.time()
+                    return True
+                else:
+                    print(f"Camera reconnected but failed to read frame")
+                    self.stream.release()
+                    self.stream = None
+                    return False
+            else:
+                print(f"Failed to reconnect camera (src={self.src})")
+                self.stream = None
+                return False
+        except Exception as e:
+            print(f"Error during camera reconnection: {e}")
+            self.stream = None
+            return False
+
     def update(self):
         """The target function of the thread. Reads frames continuously."""
         while self.running:
+            # Check if stream is still valid
+            if self.stream is None or not self.stream.isOpened():
+                if not self._reconnect():
+                    time.sleep(1.0)  # Wait before retrying reconnection
+                    continue
+
             grabbed, frame = self.stream.read()
-            if not grabbed:
-                # If the video ends (mock mode) or stream fails, we can try to reopen
+            if not grabbed or frame is None:
+                self.consecutive_failures += 1
+                
+                # If the video ends (mock mode), restart from beginning
                 if MOCK_MODE == 'true':
-                    self.stream.set(cv2.CAP_PROP_POS_FRAMES, 0)
-                else:
-                    # For real cameras, maybe a short sleep is better than a busy loop
+                    try:
+                        self.stream.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                    except:
+                        pass
                     time.sleep(0.1)
+                else:
+                    # For real cameras/IP cameras, check if we need to reconnect
+                    if self.consecutive_failures >= self.max_consecutive_failures:
+                        print(f"Too many consecutive failures ({self.consecutive_failures}), attempting reconnection...")
+                        if not self._reconnect():
+                            time.sleep(1.0)  # Wait before retrying
+                        continue
+                    else:
+                        time.sleep(0.1)  # Short sleep before retry
                 continue
 
+            # Successfully read frame
+            self.consecutive_failures = 0
+            self.last_successful_frame_time = time.time()
+            
             with self.lock:
                 self.grabbed = grabbed
                 self.frame = frame
+                self.frame_timestamp = time.time()  # Update timestamp when frame is captured
+                self.frame_sequence += 1  # Increment sequence number
 
     def read(self):
-        """Return the most recent frame."""
+        """Return the most recent frame with its timestamp and sequence number."""
         with self.lock:
-            return self.grabbed, self.frame.copy() if self.grabbed else (False, None)
+            if self.grabbed:
+                return self.grabbed, self.frame.copy(), self.frame_timestamp, self.frame_sequence
+            else:
+                return False, None, self.frame_timestamp, self.frame_sequence
+    
+    def get_latest_frame_info(self):
+        """Get timestamp and sequence of the latest frame without copying."""
+        with self.lock:
+            return self.frame_timestamp, self.frame_sequence
 
     def release(self):
         """Stop the thread and release camera resources."""
         self.running = False
         if self.thread.is_alive():
-            self.thread.join()
-        self.stream.release()
+            self.thread.join(timeout=2.0)
+        if self.stream is not None:
+            self.stream.release()
 
     def isOpened(self):
+        if self.stream is None:
+            return False
         return self.stream.isOpened()
 
     def get(self, propId):
+        if self.stream is None:
+            return 0
         return self.stream.get(propId)
 
     def set(self, propId, value):
+        if self.stream is None:
+            return False
         return self.stream.set(propId, value)
 
 
@@ -558,7 +638,7 @@ def init_ffmpeg_writer():
 
 
 def send_bbox_to_api(bboxes: list[dict]):
-    """Send bounding box data to NestJS backend API"""
+    """Send bounding box data to NestJS backend API - single attempt, fail fast"""
     try:
         payload = {
             'bboxes': bboxes,
@@ -566,10 +646,11 @@ def send_bbox_to_api(bboxes: list[dict]):
             'camera_id': f'camera_{CAMERA_INDEX}'
         }
 
+        # Single attempt with short timeout - fail fast if server is unresponsive
         response = requests.post(
             f"{API_URL}/api/bbox_history",
             json=payload,
-            timeout=2
+            timeout=1.0  # Reduced timeout to 1 second
         )
 
         if response.status_code == 201:
@@ -577,29 +658,44 @@ def send_bbox_to_api(bboxes: list[dict]):
         else:
             print(f"API response error: {response.status_code}")
 
+    except requests.exceptions.Timeout:
+        # Server didn't respond in time - silently skip (don't spam logs)
+        pass
+    except requests.exceptions.ConnectionError:
+        # Server is unreachable - silently skip (don't spam logs)
+        pass
     except requests.exceptions.RequestException as e:
-        print(f"Error sending bbox data to API: {e}")
+        # Other request errors - log once per 100 frames to avoid spam
+        if frame_count % 100 == 0:
+            print(f"Error sending bbox data to API: {e}")
     except Exception as e:
         print(f"Unexpected error in send_bbox_to_api: {e}")
 
 
 def send_device_control(device: str, action: str):
-    """Send a device control command to the NestJS backend API."""
+    """Send a device control command to the NestJS backend API - single attempt, fail fast"""
     try:
         payload = {
             'device_kind': device,
             'action': action
         }
+        # Single attempt with short timeout - fail fast if server is unresponsive
         response = requests.post(
             f"{API_URL}/api/devices/control",
             json=payload,
-            timeout=2
+            timeout=1.0  # Reduced timeout to 1 second
         )
         if response.status_code == 200:
             print(f"Successfully sent command '{action}' to device '{device}'")
         else:
             print(f"API response error for device control: {response.status_code} - {response.text}")
 
+    except requests.exceptions.Timeout:
+        # Server didn't respond in time - log and continue
+        print(f"Timeout: Failed to send device control '{action}' to '{device}' (server unresponsive)")
+    except requests.exceptions.ConnectionError:
+        # Server is unreachable - log and continue
+        print(f"Connection error: Failed to send device control '{action}' to '{device}' (server unreachable)")
     except requests.exceptions.RequestException as e:
         print(f"Error sending device control command to API: {e}")
     except Exception as e:
@@ -722,21 +818,70 @@ def main():
 
     try:
         first_frame = False
+        camera_failure_count = 0
+        max_camera_failures = 10  # Use fallback after 10 consecutive failures
+        last_processed_sequence = -1  # Track last processed frame sequence
+        
         while True:
-            # Read frame from camera
-            ret, frame = camera.read()
+            # Read frame from camera with timestamp and sequence
+            ret, frame, frame_timestamp, frame_sequence = camera.read()
 
             if not ret:
-                # print("Warning: Failed to grab frame. Using fallback image.")
+                camera_failure_count += 1
+                # Use fallback image if camera is not available
                 frame = fallback_image
                 # Resize fallback image to match camera resolution if it's known
                 if camera_width > 0 and camera_height > 0:
                     frame = cv2.resize(fallback_image, (camera_width, camera_height))
-                time.sleep(1.0) # Wait a bit before retrying
+                
+                # Log camera failure periodically (not every frame to avoid spam)
+                if camera_failure_count == 1 or camera_failure_count % 30 == 0:
+                    print(f"Camera not available (failure count: {camera_failure_count}). Using fallback image.")
+                    print("Camera reconnection is handled automatically in background thread.")
+                
+                # Don't sleep here - let the loop continue so writer can still process fallback frames
+                # The ThreadedCamera class handles reconnection automatically
+            else:
+                # Camera is working - reset failure count
+                if camera_failure_count > 0:
+                    print(f"Camera reconnected! Resuming normal operation.")
+                    camera_failure_count = 0
+                
+                # Skip if this frame was already processed (detection was slow and we're catching up)
+                if frame_sequence <= last_processed_sequence:
+                    # This is an old frame, skip detection but still send to writer
+                    frame_count += 1
+                    # Continue to writer section without detection
+                    if writer is not None:
+                        try:
+                            if USE_GSTREAMER == 'true':
+                                writer.write_frame(frame)
+                            else:
+                                if writer.poll() is None:
+                                    writer.stdin.write(frame.tobytes())
+                                    writer.stdin.flush()
+                        except:
+                            pass  # Writer errors handled in main writer section
+                    continue
+                
+                # Check if a newer frame is available before starting detection
+                # This prevents processing stale frames if detection is slow
+                latest_timestamp, latest_sequence = camera.get_latest_frame_info()
+                if latest_sequence > frame_sequence:
+                    # A newer frame is available, skip this one and get the latest
+                    if frame_count % 30 == 0:  # Log occasionally
+                        print(f"Skipping stale frame (seq {frame_sequence}), newer frame available (seq {latest_sequence})")
+                    ret, frame, frame_timestamp, frame_sequence = camera.read()
+                    if not ret:
+                        frame = fallback_image
+                        if camera_width > 0 and camera_height > 0:
+                            frame = cv2.resize(fallback_image, (camera_width, camera_height))
+                
+                last_processed_sequence = frame_sequence
 
             frame_count += 1
 
-            # Perform person detection (if enabled)
+            # Perform person detection (if enabled) - only on latest frames
             if USE_DETECTION == 'true':
                 detections = perform_detection(frame)
 
@@ -744,15 +889,15 @@ def main():
                 if detections:
                     no_detection_frames = 0
                     if not person_present_state:
-                        print("Person detected, turning display ON.")
-                        send_device_control('display', 'toggle')
+                        print("Person detected, turning display OFF.")
+                        send_device_control('display', 'on') # send on command since display is NC (normally closed)
                         person_present_state = True
                 else:
                     if person_present_state:
                         no_detection_frames += 1
                         if no_detection_frames > NO_DETECTION_THRESHOLD:
-                            print("Person absent, turning display OFF.")
-                            send_device_control('display', 'toggle')
+                            print("Person absent, turning display ON.")
+                            send_device_control('display', 'off') # send off command since display is NC (normally closed)
                             person_present_state = False
                             no_detection_frames = 0 # Reset counter after action
 
@@ -765,7 +910,7 @@ def main():
                     bbox_list = [det['bbox'] for det in detections]
                     send_bbox_to_api(bbox_list)
 
-            # Write frame to RTSP stream
+            # Write frame to RTSP stream (non-blocking, fail fast)
             if writer is not None:
                 try:
                     # Check frame properties for debugging
@@ -778,8 +923,19 @@ def main():
                         if not writer.write_frame(frame):
                             raise Exception("Failed to write frame to GStreamer pipeline")
                     else:
-                        # FFmpeg subprocess writer
-                        writer.stdin.write(frame.tobytes())
+                        # FFmpeg subprocess writer - check if process is still alive first
+                        if writer.poll() is not None:
+                            # Process has terminated
+                            raise BrokenPipeError("FFmpeg process terminated")
+                        
+                        # Try to write frame - this may block if FFmpeg buffer is full
+                        # Use a timeout mechanism by checking process status
+                        try:
+                            writer.stdin.write(frame.tobytes())
+                            writer.stdin.flush()  # Ensure data is sent immediately
+                        except (BrokenPipeError, OSError) as e:
+                            # Pipe broken or process terminated
+                            raise BrokenPipeError(f"FFmpeg pipe error: {e}")
 
                 except BrokenPipeError:
                     print(f"Error: RTSP stream pipe broken. Writer process may have terminated.")
@@ -792,25 +948,28 @@ def main():
                                 writer.stdin.close()
                             except:
                                 pass
-                            writer.terminate()
                             try:
-                                _, stderr = writer.communicate(timeout=2)
+                                writer.terminate()
+                                _, stderr = writer.communicate(timeout=1)
                                 if stderr:
                                     print(f"FFmpeg error output:")
                                     print(stderr.decode())
                             except subprocess.TimeoutExpired:
                                 writer.kill()
-                                _, stderr = writer.communicate()
-                                if stderr:
-                                    print(f"FFmpeg error output (killed):")
-                                    print(stderr.decode())
+                                try:
+                                    _, stderr = writer.communicate(timeout=0.5)
+                                    if stderr:
+                                        print(f"FFmpeg error output (killed):")
+                                        print(stderr.decode())
+                                except:
+                                    pass
                     except Exception as e:
                         print(f"Error during writer cleanup: {e}")
                     writer = None
                     print("Attempting to reconnect writer...")
 
-                    # Wait before attempting to reconnect
-                    time.sleep(2.0)  # Wait 2 seconds before reconnecting
+                    # Wait before attempting to reconnect (but don't block the main loop too long)
+                    time.sleep(1.0)  # Reduced wait time
 
                     # Attempt to reconnect
                     if USE_GSTREAMER == 'true':
@@ -823,47 +982,51 @@ def main():
                     if writer is not None:
                         print(f"Writer reconnected successfully using {writer_type}")
                     else:
-                        print(f"Failed to reconnect writer. Continuing without RTSP streaming...")
+                        print(f"Failed to reconnect writer. Will retry later...")
 
                 except Exception as e:
-                    print(f"Error writing to RTSP stream: {e}")
-                    # Don't recreate writer, just log the error and continue
+                    # Other errors - log but don't recreate writer immediately
+                    if frame_count % 30 == 0:  # Log once per second to avoid spam
+                        print(f"Error writing to RTSP stream: {e}")
+                    # Mark writer as potentially broken for periodic check
+                    writer = None
 
-            # Check writer process status periodically
-            if writer is not None and frame_count % 30 == 0:  # Check every second
-                # For GStreamer (PyGObject), check is_playing status
-                if USE_GSTREAMER == 'true':
-                    if not writer.is_playing:
-                        print(f"GStreamer pipeline stopped unexpectedly")
-                        writer.cleanup()
-                        writer = None
-                        print("Attempting to reconnect writer...")
-
+            # Check writer process status periodically and attempt reconnection if needed
+            if frame_count % 30 == 0:  # Check every second
+                if writer is not None:
+                    # For GStreamer (PyGObject), check is_playing status
+                    if USE_GSTREAMER == 'true':
+                        if not writer.is_playing:
+                            print(f"GStreamer pipeline stopped unexpectedly")
+                            writer.cleanup()
+                            writer = None
+                    else:
+                        # For FFmpeg subprocess, check poll status
+                        if writer.poll() is not None:  # Process has terminated
+                            print(f"Writer process terminated unexpectedly. Exit code: {writer.returncode}")
+                            # Try to get any remaining error output
+                            try:
+                                _, stderr = writer.communicate(timeout=0.1)
+                                if stderr:
+                                    print(f"FFmpeg error output:")
+                                    print(stderr.decode())
+                            except:
+                                pass
+                            writer = None
+                
+                # Attempt to reconnect writer if it's None (camera must be working)
+                if writer is None and camera is not None and camera.isOpened():
+                    print("Attempting to reconnect writer...")
+                    if USE_GSTREAMER == 'true':
                         writer = init_gstreamer_writer()
-                        if writer is not None:
-                            print(f"Writer reconnected successfully using GStreamer (PyGObject)")
-                        else:
-                            print(f"Failed to reconnect writer. Continuing without RTSP streaming...")
-                else:
-                    # For FFmpeg subprocess, check poll status
-                    if writer.poll() is not None:  # Process has terminated
-                        print(f"Writer process terminated unexpectedly. Exit code: {writer.returncode}")
-                        # Try to get any remaining error output
-                        try:
-                            _, stderr = writer.communicate(timeout=0.1)
-                            if stderr:
-                                print(f"FFmpeg error output:")
-                                print(stderr.decode())
-                        except:
-                            pass
-                        writer = None
-                        print("Attempting to reconnect writer...")
-
+                        writer_type = "GStreamer (PyGObject)"
+                    else:
                         writer = init_ffmpeg_writer()
-                        if writer is not None:
-                            print(f"Writer reconnected successfully using FFmpeg")
-                        else:
-                            print(f"Failed to reconnect writer. Continuing without RTSP streaming...")
+                        writer_type = "FFmpeg"
+                    
+                    if writer is not None:
+                        print(f"Writer reconnected successfully using {writer_type}")
+                    # If reconnection fails, will retry on next check
 
             # Display frame info
             if frame_count % (15*10) == 0:  # Print every second (assuming 30fps)

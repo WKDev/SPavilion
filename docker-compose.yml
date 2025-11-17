@@ -26,51 +26,6 @@ services:
       - s-pavilion-network
     restart: unless-stopped
 
-  # NestJS Backend (Disabled - Running on Windows host directly)
-  # To run on Windows: cd nest && npm install && npm run build && npm run start:prod
-  # To install as Windows Service: cd nest && npm run install-service
-  # nest:
-  #   user: root
-  #   image: node:22-alpine
-  #   working_dir: /app
-  #   environment:
-  #     DATABASE_URL: postgresql://admin:uhBscN4gshrqiwJc@postgres:5432/s_pavilion
-  #     PLC_PORT: /dev/ttyUSB0
-  #     PLC_BAUD_RATE: 115200
-  #     PLC_SLAVE_ID: 1
-  #     NODE_ENV: development
-  #     TZ: Asia/Seoul
-  #     # Platform detection
-  #     PLATFORM: ${PLATFORM:-windows}  # linux or windows
-
-      # Windows Host Monitor (optional, for accessing real Windows host system info)
-      # HOST_MONITOR_URL: ${HOST_MONITOR_URL:-http://host.docker.internal:19100}
-    # depends_on:
-    #   - postgres
-    # ports:
-    #   - "3000:3000"
-    # # Serial port device mapping for both Linux and Windows
-    # devices:
-    #   - /dev/ttyUSB0:/dev/ttyUSB0  # PLC serial port (Linux)
-    #   - /dev/ttyUSB1:/dev/ttyUSB1  # Additional serial port (Linux)
-    #   - /dev/ttyACM0:/dev/ttyACM0  # Arduino/other serial devices (Linux)
-    #   - /dev/ttyACM1:/dev/ttyACM1  # Additional Arduino devices (Linux)
-    # privileged: true  # Required for serial port access
-
-    # profiles:
-    #   - docker  # Only enable with --profile docker
-    # volumes:
-    #   - ./nest:/app  # Mount nest folder for live development
-    #   - /app/node_modules  # Anonymous volume for node_modules
-    #   - ./next/dist:/app/public  # Serve next build
-    #   # Windows-specific volumes (will be ignored on Linux)
-    #   - /dev/bus/usb:/dev/bus/usb  # USB device access
-    #   - /dev:/dev  # Mount /dev to access USB serial devices in WSL2
-    # networks:
-    #   - s-pavilion-network
-    # restart: unless-stopped
-    # command: sh -c "npm install && npm run start:dev"
-
   # MediaMTX RTSP to WebRTC/HLS converter
   mediamtx:
     image: bluenviron/mediamtx:latest
@@ -139,12 +94,12 @@ services:
     environment:
       NODE_ENV: production
       TZ: Asia/Seoul
-      NEXT_PUBLIC_API_URL: http://localhost:3000/api
+      # 프록시 사용 시 NEXT_PUBLIC_API_URL 불필요 (상대 경로 /api 사용)
+      # 개발 모드에서만 필요: NEXT_PUBLIC_API_URL=http://localhost:3000/api
+      # Browser accesses MediaMTX WebRTC on host port 8889
       NEXT_PUBLIC_WEBRTC_URL: http://localhost:8889
     ports:
       - "3001:3001"
-    profiles:
-      - docker  # Only enable with --profile docker
     volumes:
       - ./next:/app
       - /app/node_modules  # Anonymous volume for node_modules
@@ -153,40 +108,6 @@ services:
       - s-pavilion-network
     restart: unless-stopped
     command: sh -c "npm install && npm run build && npm run start" 
-
-
-  # Nginx Reverse Proxy (Optional)
-  # nginx:
-  #   build:
-  #     context: ./nginx
-  #     dockerfile: Dockerfile
-  #   container_name: s-pavilion-nginx
-  #   ports:
-  #     - "80:80"
-  #   depends_on:
-  #     - nest
-  #     - mediamtx
-  #   networks:
-  #     - s-pavilion-network
-  #   restart: unless-stopped
-  #   profiles:
-  #     - with-nginx
-
-  # mock-modbus:
-  #   build:
-  #     context: ./mock-modbus
-  #     dockerfile: Dockerfile
-  #   container_name: mock-modbus
-  #   ports:
-  #     - "502:502"
-  #   networks:
-  #     - s-pavilion-network
-  #   restart: unless-stopped
-  #   command: python -u main.py
-  #   volumes:
-  #     - ./mock-modbus:/app
-  #   profiles:
-  #     - mock
 
 x-logging: &default-logging
   driver: "json-file"
