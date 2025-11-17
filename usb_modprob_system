@@ -1,0 +1,8 @@
+/etc/modules-load.d/usbserial.conf
+
+sudo tee /etc/modules-load.d/usbserial.conf <<'EOF'
+usbserial
+ftdi_sio
+ch341
+cdc_acm
+EOF

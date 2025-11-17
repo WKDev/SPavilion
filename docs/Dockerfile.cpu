@@ -1,0 +1,43 @@
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# OS deps + GStreamer full runtime + RTSP 서버 + VAAPI
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3-pip \
+    ca-certificates curl \
+    # X/OpenGL 런타임
+    libgl1 libglib2.0-0 libsm6 libxext6 libxrender1 libgomp1 \
+    # VAAPI 가속(호스트 /dev/dri 필요)
+    libdrm2 va-driver-all gstreamer1.0-vaapi \
+    # GStreamer 코어
+    libgstreamer1.0-0 libgstreamer-plugins-base1.0-0 gstreamer1.0-tools \
+    gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
+    gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly \
+    gstreamer1.0-libav gstreamer1.0-gl \
+    # PyGObject(GStreamer 바인딩)
+    python3-gi gobject-introspection gir1.2-gst-rtsp-server-1.0 \
+    # RTSP 서버 라이브러리
+    libgstrtspserver-1.0-0 gir1.2-gst-rtsp-server-1.0 \
+    # 유틸(선택) : 코덱·디버깅 보조
+    ffmpeg \
+ && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+RUN echo "Python version: $(python3 --version)" && echo "Pip version: $(pip3 --version)"
+
+# Python deps (CPU 버전)
+COPY requirements-cpu.txt requirements.txt
+RUN python3 -m pip install --system --no-cache-dir -r requirements.txt
+
+# PyTorch CPU 확인
+RUN python3 -c "import torch; print('CUDA available:', torch.cuda.is_available()); print('PyTorch version:', torch.__version__)"
+
+# GStreamer 동작 자가 테스트
+RUN gst-inspect-1.0 | head -n 20 && \
+    gst-launch-1.0 -q fakesrc num-buffers=5 ! fakesink
+
+ENV PYTHONUNBUFFERED=1
+
+CMD ["python3", "main.py"]

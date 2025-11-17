@@ -1,0 +1,32 @@
+<service>
+	<id>spavilionnestjsbackend.exe</id>
+	<name>S-Pavilion NestJS Backend</name>
+	<description>S-Pavilion hardware monitoring system backend service</description>
+	<executable>C:\Program Files\nodejs\node.exe</executable>
+	<argument>C:\Users\user\SPavilion\nest\node_modules\node-windows\lib\wrapper.js</argument>
+	<argument>--file</argument>
+	<argument>C:\Users\user\SPavilion\nest\nest-service.js</argument>
+	<argument>--scriptoptions=</argument>
+	<argument>--log</argument>
+	<argument>S-Pavilion NestJS Backend wrapper</argument>
+	<argument>--grow</argument>
+	<argument>0.25</argument>
+	<argument>--wait</argument>
+	<argument>1</argument>
+	<argument>--maxrestarts</argument>
+	<argument>3</argument>
+	<argument>--abortonerror</argument>
+	<argument>n</argument>
+	<argument>--stopparentfirst</argument>
+	<argument>undefined</argument>
+	<logmode>rotate</logmode>
+	<stoptimeout>30sec</stoptimeout>
+	<env name="NODE_ENV" value="production"/>
+	<env name="PORT" value="3000"/>
+	<serviceaccount>
+		<domain>DESKTOP-28OGL4E</domain>
+		<user>LocalSystem</user>
+		<password></password>
+	</serviceaccount>
+	<workingdirectory>C:\Users\user\SPavilion\nest</workingdirectory>
+</service>

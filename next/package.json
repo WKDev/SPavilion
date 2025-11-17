@@ -1,0 +1,116 @@
+{
+  "name": "SPav",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "next build",
+    "dev": "next dev -p 3001",
+    "start": "next start -p 3001",
+    "electron": "electron .",
+    "electron:dev": "cross-env NODE_ENV=development electron .",
+    "electron:pack": "electron-builder",
+    "electron:dist": "electron-builder --publish=never",
+    "electron:dist:dir": "electron-builder --dir"
+  },
+  "main": "electron/main.js",
+  "build": {
+    "appId": "com.spavilion.app",
+    "productName": "스마트 쉼터",
+    "directories": {
+      "output": "dist-electron",
+      "buildResources": "electron/build"
+    },
+    "files": [
+      "electron/**/*",
+      "!electron/**/*.{md,ts}",
+      "package.json"
+    ],
+    "extraFiles": [
+      {
+        "from": "electron/favicon.ico",
+        "to": "favicon.ico",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "electron/favicon.ico"
+    },
+    "nsis": {
+      "oneClick": true,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "installerIcon": "electron/favicon.ico",
+      "uninstallerIcon": "electron/favicon.ico",
+      "installerHeaderIcon": "electron/favicon.ico"
+    },
+    "portable": {
+      "artifactName": "${productName}-${version}-portable.exe"
+    }
+  },
+  "dependencies": {
+    "@radix-ui/react-alert-dialog": "^1.1.15",
+    "@radix-ui/react-dialog": "^1.1.2",
+    "@radix-ui/react-label": "^2.1.0",
+    "@radix-ui/react-popover": "latest",
+    "@radix-ui/react-progress": "^1.1.7",
+    "@radix-ui/react-select": "^2.2.6",
+    "@radix-ui/react-separator": "^1.1.0",
+    "@radix-ui/react-slider": "^1.3.6",
+    "@radix-ui/react-switch": "latest",
+    "@radix-ui/react-tabs": "latest",
+    "@radix-ui/react-toggle-group": "latest",
+    "@radix-ui/react-tooltip": "^1.1.4",
+    "@tailwindcss/container-queries": "^0.1.1",
+    "@types/d3": "^7.4.3",
+    "@types/react-datepicker": "^6.2.0",
+    "chart.js": "^4.5.1",
+    "chartjs-adapter-date-fns": "^3.0.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "d3": "latest",
+    "date-fns": "latest",
+    "immer": "latest",
+    "lucide-react": "^0.454.0",
+    "next": "16.0.0",
+    "react": "19.2.0",
+    "react-chartjs-2": "^5.3.1",
+    "react-datepicker": "^8.8.0",
+    "react-day-picker": "latest",
+    "react-dom": "19.2.0",
+    "tailwind-merge": "^2.5.5",
+    "tailwindcss-animate": "^1.0.7",
+    "tw-animate-css": "latest",
+    "use-sync-external-store": "latest",
+    "zustand": "latest"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.1.9",
+    "@types/node": "^22",
+    "@types/react": "19.2.2",
+    "@types/react-dom": "19.2.2",
+    "cross-env": "^7.0.3",
+    "electron": "^33.0.0",
+    "electron-builder": "^25.1.8",
+    "postcss": "^8.5",
+    "tailwindcss": "^4.1.9",
+    "typescript": "^5",
+    "winreg": "^1.2.5"
+  }
+}

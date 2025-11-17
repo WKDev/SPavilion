@@ -1,0 +1,9 @@
+postgres_data/
+
+# PLC connection config (user-specific, not tracked in git)
+plc-config.json
+nest/plc-config.json
+
+# Electron build outputs
+dist-electron/
+next/dist-electron/

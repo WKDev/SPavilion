@@ -1,0 +1,19 @@
+IPCAMERA
+- 192.168.1.64(access with browser, port 80)
+- pw sidsid965
+What is your father's name?
+
+security question
+What is your father's name? -> sid
+What is your mother's name? -. sid965
+What is the name of your teacher in charge of class in senior high school? -> sidsid965
+
+- network configuration
+  - 192.1681.64/24, gw 192.168.1.1
+  - rtsp url ; rtsp://
+    - ports
+      rtsp: 554
+
+
+- fhd / 25fps
+     
