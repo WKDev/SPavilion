@@ -52,12 +52,52 @@ async function bootstrap() {
         logger.debug(`Proxying ${req.method} ${req.url} to ${nextJsUrl}`);
       },
       onError: (err, req, res) => {
-        logger.error(`Proxy error: ${err.message}`);
+        logger.error(`Proxy error for ${req.method} ${req.url}: ${err.message}`);
         if (!res.headersSent) {
-          res.status(502).json({
-            error: 'Bad Gateway',
-            message: 'Next.js server is not available',
-          });
+          // Check if it's a connection error
+          const isConnectionError = err.message.includes('ECONNREFUSED') || 
+                                   err.message.includes('connect') ||
+                                   err.code === 'ECONNREFUSED';
+          
+          if (isConnectionError) {
+            res.status(502).send(`
+              <!DOCTYPE html>
+              <html>
+                <head>
+                  <title>Next.js Server Not Available</title>
+                  <style>
+                    body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; }
+                    h1 { color: #d32f2f; }
+                    code { background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }
+                    .solution { background: #e3f2fd; padding: 15px; border-radius: 5px; margin-top: 20px; }
+                  </style>
+                </head>
+                <body>
+                  <h1>Next.js Server Not Available</h1>
+                  <p>The proxy is trying to forward requests to <code>${nextJsUrl}</code>, but the Next.js server is not running.</p>
+                  <div class="solution">
+                    <h3>Solutions:</h3>
+                    <ol>
+                      <li><strong>Start Next.js server:</strong><br>
+                        <code>cd next && npm run dev</code> (or <code>pnpm dev</code>)
+                      </li>
+                      <li><strong>Disable proxy (development mode):</strong><br>
+                        Set <code>NODE_ENV=development</code> or remove <code>ENABLE_PROXY=true</code><br>
+                        Then access Next.js directly at <code>http://localhost:3001</code>
+                      </li>
+                    </ol>
+                  </div>
+                  <p><small>Requested path: <code>${req.url}</code></small></p>
+                </body>
+              </html>
+            `);
+          } else {
+            res.status(502).json({
+              error: 'Bad Gateway',
+              message: `Proxy error: ${err.message}`,
+              target: nextJsUrl,
+            });
+          }
         }
       },
     } as any);
