@@ -30,7 +30,7 @@ export function AppSidebar() {
   return (
     <Sidebar>
       <SidebarHeader className="border-b px-6 py-4">
-        <h1 className="text-xl font-bold text-primary">SPav</h1>
+        <h1 className="text-xl font-bold text-primary">스마트 쉼터</h1>
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>

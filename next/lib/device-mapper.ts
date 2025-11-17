@@ -37,29 +37,15 @@ export function toUiDeviceId(deviceKind: DeviceKind): DeviceId {
  * 장치 이름 매핑 (표시용)
  */
 export const DEVICE_NAMES: Record<DeviceId, string> = {
-  heat: "Heat",
-  fan: "Fan",
-  btsp: "BTSP",
-  "light-red": "Red Light",
-  "light-green": "Green Light",
-  "light-blue": "Blue Light",
-  "light-white": "White Light",
-  display: "Display",
-}
-
-/**
- * 타이머 기반 장치인지 확인
- * @param deviceId - 장치 ID
- * @returns 타이머 기반 장치 여부
- *
- * @description
- * - heat, fan: 10분 자동 꺼짐
- * - btsp, lights: 1시간 자동 꺼짐
- * - display: 수동 토글 (타이머 없음)
- */
-export function isTimerDevice(deviceId: DeviceId): boolean {
-  return deviceId !== "display"
-}
+  heat: "온열",
+  fan: "송풍",
+  btsp: "음악",
+  "light-red": "적색 조명",
+  "light-green": "녹색 조명",
+  "light-blue": "파란 조명",
+  "light-white": "흰색 조명",
+  display: "디스플레이",
+};
 
 /**
  * 장치의 타이머 시간(밀리초) 반환

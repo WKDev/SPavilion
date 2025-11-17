@@ -38,14 +38,10 @@ export function StreamViewer() {
   const webrtcRef = useRef<WebRTCManager | null>(null)
   const cardRef = useRef<HTMLDivElement>(null)
 
-  // Load saved settings from localStorage
-  const [selectedViews, setSelectedViews] = useState<ViewOption[]>(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("stream-viewer-viewmode")
-      return saved ? JSON.parse(saved) : ["video"]
-    }
-    return ["video"]
-  })
+  // Initialize with default values to prevent hydration mismatch
+  // Load from localStorage in useEffect after mount (client-side only)
+  const [selectedViews, setSelectedViews] = useState<ViewOption[]>(["video"])
+  const [opacity, setOpacity] = useState(60)
 
   const [isConnecting, setIsConnecting] = useState(false)
   const [isConnected, setIsConnected] = useState(false)
@@ -58,14 +54,31 @@ export function StreamViewer() {
   // Get camera areas from store
   const { areas } = useCameraAreaStore()
 
-  // Overlay opacity (0-100, maps to 0-1 for HeatmapVisualization)
-  const [opacity, setOpacity] = useState(() => {
+  // Load saved settings from localStorage after mount (client-side only)
+  // This prevents hydration mismatch by ensuring server and client render the same initial HTML
+  useEffect(() => {
     if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("stream-viewer-opacity")
-      return saved ? parseInt(saved, 10) : 60
+      const savedViews = localStorage.getItem("stream-viewer-viewmode")
+      if (savedViews) {
+        try {
+          const parsed = JSON.parse(savedViews)
+          if (Array.isArray(parsed)) {
+            setSelectedViews(parsed)
+          }
+        } catch (e) {
+          console.error("Failed to parse saved view mode:", e)
+        }
+      }
+
+      const savedOpacity = localStorage.getItem("stream-viewer-opacity")
+      if (savedOpacity) {
+        const parsed = parseInt(savedOpacity, 10)
+        if (!isNaN(parsed) && parsed >= 0 && parsed <= 100) {
+          setOpacity(parsed)
+        }
+      }
     }
-    return 60
-  })
+  }, []) // Run only once on mount
 
   // Fullscreen toggle handler
   const toggleFullscreen = () => {

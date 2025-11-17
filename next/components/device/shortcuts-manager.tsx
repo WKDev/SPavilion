@@ -25,49 +25,49 @@ const DEFAULT_SHORTCUTS = [
     stateType: "register" as const,
     statusAddr: 0x00,  // Read from 0x00
     commandAddr: 0x10, // Write to 0x10
-    stateValue: 600,   // 10분
+    stateValue: 60,   // 1분
   },
   {
     buttonTitle: "팬",
     stateType: "register" as const,
     statusAddr: 0x01,  // Read from 0x01
     commandAddr: 0x11, // Write to 0x11
-    stateValue: 60,   // 10분
+    stateValue: 60,   // 1분
   },
   {
     buttonTitle: "블루투스 스피커",
     stateType: "register" as const,
-    statusAddr: 0x02,  // Read from 0x02
-    commandAddr: 0x12, // Write to 0x12
-    stateValue: 3600,  // 1시간
+    statusAddr: 0x03,  // Read from 0x03
+    commandAddr: 0x13, // Write to 0x13
+    stateValue: 60,  // 1분
   },
   {
     buttonTitle: "적색 LED",
     stateType: "register" as const,
-    statusAddr: 0x03,  // Read from 0x03
-    commandAddr: 0x13, // Write to 0x13
-    stateValue: 3600,  // 1시간
+    statusAddr: 0x04,  // Read from 0x04
+    commandAddr: 0x14, // Write to 0x14
+    stateValue: 60,  // 1분
   },
   {
     buttonTitle: "녹색 LED",
     stateType: "register" as const,
-    statusAddr: 0x04,  // Read from 0x04
-    commandAddr: 0x14, // Write to 0x14
-    stateValue: 3600,  // 1시간
+    statusAddr: 0x05,  // Read from 0x05
+    commandAddr: 0x15, // Write to 0x15
+    stateValue: 60,  // 1분
   },
   {
     buttonTitle: "청색 LED",
     stateType: "register" as const,
-    statusAddr: 0x05,  // Read from 0x05
-    commandAddr: 0x15, // Write to 0x15
-    stateValue: 3600,  // 1시간
+    statusAddr: 0x06,  // Read from 0x06
+    commandAddr: 0x16, // Write to 0x16
+    stateValue: 60,  // 1분
   },
   {
     buttonTitle: "백색 LED",
     stateType: "register" as const,
-    statusAddr: 0x06,  // Read from 0x06
-    commandAddr: 0x16, // Write to 0x16
-    stateValue: 3600,  // 1 hour
+    statusAddr: 0x07,  // Read from 0x07
+    commandAddr: 0x17, // Write to 0x17
+    stateValue: 60,  // 1분
   },
 
 ]

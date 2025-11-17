@@ -17,8 +17,10 @@ import type {
 } from "./types"
 import { toApiDeviceKind, toUiDeviceId, DEVICE_NAMES } from "./device-mapper"
 
-// API Base URL (환경 변수에서 로드)
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000/api"
+// API Base URL
+// 프록시 사용 시: 상대 경로 사용 (NestJS가 /api/* 처리)
+// 개발 모드: 환경 변수로 절대 URL 지정 가능
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "/api"
 
 /**
  * API 에러 처리 헬퍼

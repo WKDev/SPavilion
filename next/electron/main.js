@@ -149,17 +149,14 @@ function createWindow() {
   // 개발 모드인지 확인
   const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
   
-  // Option 2: Next.js를 별도 포트(3001)에서 실행하고 NestJS(3000)에서 프록시
-  // 프로덕션 모드에서는 NestJS 프록시를 통해 접근 (포트 3000)
-  // 개발 모드에서는 Next.js에 직접 접근 (포트 3001)
+  // NestJS 프록시를 통해 접근 (포트 3000)
+  // NestJS가 /api/*는 직접 처리하고, 나머지는 Next.js(3001)로 프록시
+  // 이렇게 하면 개발/프로덕션 모두 상대 경로 /api 사용 가능
+  win.loadURL('http://localhost:3000');
+  
+  // 개발 모드에서 개발자 도구 자동 열기 (선택사항)
   if (isDev) {
-    win.loadURL('http://localhost:3001');
-    // 개발자 도구 열기 (선택사항)
     // win.webContents.openDevTools();
-  } else {
-    // 프로덕션: NestJS 프록시 서버를 통해 접근 (포트 3000)
-    // NestJS가 Next.js(3001)로 프록시하므로 포트 3000 사용
-    win.loadURL('http://localhost:3000');
   }
   
   return win;
