@@ -70,3 +70,21 @@ model DeviceUsageHour {
   @@id([hourTs, deviceType])
   @@map("device_usage_hour")
 }
+
+// 3. Weather History (temperature, humidity from KMA API)
+model WeatherHistory {
+  id            BigInt   @id @default(autoincrement())
+  ts            DateTime @default(now()) @db.Timestamptz
+  temperature   Float?   @db.Real  // 기온 (°C)
+  humidity      Float?   @db.Real  // 습도 (%)
+  precipitation String?  // 강수형태 (없음, 비, 눈 등)
+  windSpeed     Float?   @db.Real @map("wind_speed") // 풍속 (m/s)
+  baseDate      String   @map("base_date") // 기상청 기준 날짜 (YYYYMMDD)
+  baseTime      String   @map("base_time") // 기상청 기준 시간 (HHMM)
+  nx            Int      // 격자 X 좌표
+  ny            Int      // 격자 Y 좌표
+
+  @@index([ts])
+  @@index([baseDate, baseTime])
+  @@map("weather_history")
+}

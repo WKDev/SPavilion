@@ -2,6 +2,7 @@ import { StreamViewer } from "@/components/dashboard/stream-viewer"
 import { DevMan } from "@/components/device/dev-man"
 import { UsageHist } from "@/components/dashboard/usage-hist"
 import { StayRate } from "@/components/dashboard/stay-rate"
+import { WeatherCard } from "@/components/dashboard/weather-card"
 
 export default function DashboardPage() {
   return (
@@ -11,8 +12,9 @@ export default function DashboardPage() {
         <StreamViewer />
       </div>
 
-      {/* Right Column (30%): StayRate + DevMan */}
+      {/* Right Column (30%): Weather + StayRate + DevMan */}
       <div className="flex-[3] flex flex-col gap-3">
+      <WeatherCard />
       <StayRate />
       <DevMan />
       <UsageHist />

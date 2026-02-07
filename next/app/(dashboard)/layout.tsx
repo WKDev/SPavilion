@@ -3,6 +3,7 @@ import { AppSidebar } from "@/components/layout/sidebar"
 import { Header } from "@/components/layout/header"
 import { SidebarProvider } from "@/components/ui/sidebar"
 import { PLCPollingProvider } from "@/components/providers/plc-polling-provider"
+import { MidnightRefreshProvider } from "@/components/providers/midnight-refresh-provider"
 
 export default function DashboardLayout({
   children,
@@ -11,15 +12,17 @@ export default function DashboardLayout({
 }) {
   return (
     <PLCPollingProvider enabled={true} interval={1000}>
-      <SidebarProvider>
-        <div className="flex h-screen w-full">
-          <AppSidebar />
-          <div className="flex flex-1 flex-col">
-            <Header />
-            <main className="flex-1 overflow-auto p-3">{children}</main>
+      <MidnightRefreshProvider>
+        <SidebarProvider>
+          <div className="flex h-screen w-full">
+            <AppSidebar />
+            <div className="flex flex-1 flex-col">
+              <Header />
+              <main className="flex-1 overflow-auto p-3">{children}</main>
+            </div>
           </div>
-        </div>
-      </SidebarProvider>
+        </SidebarProvider>
+      </MidnightRefreshProvider>
     </PLCPollingProvider>
   )
 }

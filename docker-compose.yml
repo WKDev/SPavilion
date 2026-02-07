@@ -75,32 +75,30 @@ services:
       - s-pavilion-network
     restart: unless-stopped
     command: python3 main.py
-
-  # Next.js Frontend (Optional - Can run on Windows host directly)
-  # To run on Windows: cd next && npm install && npm run build && npm run start
+      
   nextjs:
-    image: node:24-slim
+    build:
+      context: ./next        # Dockerfile 있는 폴더
+      dockerfile: Dockerfile
+      args:
+        # 빌드 시점에 필요한 NEXT_PUBLIC_* 환경변수 (.env.local에서 읽음)
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3000/api}
+        NEXT_PUBLIC_WEBRTC_URL: ${NEXT_PUBLIC_WEBRTC_URL:-http://localhost:8889}
     platform: linux/amd64
     container_name: s-pavilion-nextjs
-    working_dir: /app
+    # .env.local 파일에서 런타임 환경변수 로드
+    env_file:
+      - ./next/.env.local
     environment:
       TZ: Asia/Seoul
-      # 프록시 사용 시 NEXT_PUBLIC_API_URL 불필요 (상대 경로 /api 사용)
-      # 개발 모드에서만 필요: NEXT_PUBLIC_API_URL=http://localhost:3000/api
-      # Browser accesses MediaMTX WebRTC on host port 8889
-      NEXT_PUBLIC_WEBRTC_URL: http://localhost:8889
       NODE_OPTIONS: --max-old-space-size=4096
+      PORT: 3001
     ports:
       - "3001:3001"
-    volumes:
-      - ./next:/app
-      - /app/node_modules  # Anonymous volume to prevent host node_modules from mounting
-      - /app/.next  # Anonymous volume for .next build cache
     networks:
       - s-pavilion-network
     restart: unless-stopped
     shm_size: 4gb
-    command: sh -c "yarn install --frozen-lockfile && yarn build && NODE_ENV=production yarn start" 
 
 x-logging: &default-logging
   driver: "json-file"

@@ -54,6 +54,7 @@ interface AppState {
   setPolling: (polling: boolean) => void
   setTimeRange: (range: TimeRange) => void
   setCustomTimeRange: (from: Date, to: Date, fromTime: string, toTime: string, label: string) => void
+  setTodayRange: () => void
 }
 
 export const useStore = create<AppState>((set) => {
@@ -175,6 +176,23 @@ export const useStore = create<AppState>((set) => {
           customRangeLabel: label,
         },
       })),
+    setTodayRange: () => {
+      const now = new Date()
+      const from = new Date(now)
+      from.setHours(0, 0, 0, 0) // 오늘 자정
+
+      set((prev) => ({
+        timeRange: {
+          ...prev.timeRange,
+          selectedRange: "24h",
+          fromDate: from,
+          toDate: now,
+          fromTime: "00:00",
+          toTime: "23:59",
+          customRangeLabel: "",
+        },
+      }))
+    },
   }
 })
 

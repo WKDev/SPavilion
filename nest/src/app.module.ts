@@ -12,6 +12,7 @@ import { BboxHistoryModule } from './bbox-history/bbox-history.module';
 import { PlcModule } from './plc/plc.module';
 import { SystemModule } from './system/system.module';
 import { DatabaseModule } from './database/database.module';
+import { WeatherModule } from './weather/weather.module';
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { DatabaseModule } from './database/database.module';
     PlcModule,
     SystemModule,
     DatabaseModule,
+    WeatherModule,
   ],
   controllers: [AppController],
   providers: [AppService],
