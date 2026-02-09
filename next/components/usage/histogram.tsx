@@ -166,7 +166,7 @@ export function Histogram({ data, startDate, endDate }: HistogramProps) {
   }
 
   return (
-    <div className="w-full h-[300px]">
+    <div className="w-full h-[200px]">
       <Bar data={chartData} options={options} />
     </div>
   )

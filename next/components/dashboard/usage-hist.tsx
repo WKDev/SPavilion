@@ -1,15 +1,18 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Histogram } from "@/components/usage/histogram"
 import { api, type HistogramData } from "@/lib/api"
 import { useStore } from "@/lib/store"
 
+const REFRESH_INTERVAL = 60 * 1000 // 1 minute
+
 export function UsageHist() {
   const [data, setData] = useState<HistogramData[]>([])
   const [loading, setLoading] = useState(true)
   const timeRangeState = useStore((state) => state.timeRange)
+  const usageHistRefreshKey = useStore((state) => state.usageHistRefreshKey)
 
   // Convert global time range state to { from, to } format with useMemo
   const timeRange = useMemo(() => {
@@ -24,24 +27,34 @@ export function UsageHist() {
     return { from: fromDate, to: toDate }
   }, [timeRangeState.fromDate, timeRangeState.toDate, timeRangeState.fromTime, timeRangeState.toTime])
 
-  useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true)
-      try {
-        const histogramData = await api.getUsageHistory(timeRange)
-        setData(histogramData)
-      } catch (error) {
-        console.error("[v0] Failed to fetch usage history:", error)
-      } finally {
-        setLoading(false)
-      }
+  const fetchData = useCallback(async (showLoading = true) => {
+    if (showLoading) setLoading(true)
+    try {
+      const histogramData = await api.getUsageHistory(timeRange)
+      setData(histogramData)
+    } catch (error) {
+      console.error("[v0] Failed to fetch usage history:", error)
+    } finally {
+      if (showLoading) setLoading(false)
     }
-
-    fetchData()
   }, [timeRange])
 
+  // Initial fetch and refresh on timeRange/key change
+  useEffect(() => {
+    fetchData()
+  }, [fetchData, usageHistRefreshKey])
+
+  // Periodic refresh every minute
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetchData(false) // Don't show loading indicator for periodic refresh
+    }, REFRESH_INTERVAL)
+
+    return () => clearInterval(interval)
+  }, [fetchData])
+
   return (
-    <Card className="h-[400px]">
+    <Card className="">
       <CardHeader>
         <div className="flex flex-wrap items-center justify-between gap-4">
           <CardTitle>사용 이력</CardTitle>
@@ -49,11 +62,11 @@ export function UsageHist() {
       </CardHeader>
       <CardContent>
         {loading ? (
-          <div className="flex h-[250px] items-center justify-center">
+          <div className="flex items-center justify-center">
             <p className="text-muted-foreground">Loading usage data...</p>
           </div>
         ) : data.length === 0 ? (
-          <div className="flex h-[250px] items-center justify-center">
+          <div className="flex items-center justify-center">
             <p className="text-muted-foreground">No usage data available for this time range</p>
           </div>
         ) : (

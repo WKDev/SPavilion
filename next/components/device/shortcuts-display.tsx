@@ -16,20 +16,22 @@ export function ShortcutsDisplay() {
   const { plc } = useStore()
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
 
-  // Map command addresses to device kinds based on ModbusService mapping
+  // Map command addresses to backend-compatible device kinds
+  // Note: Backend only accepts: heat, fan, btsp, light_red, light_green, light_blue, light_white, display
+  // For fan2 (address 0x12), return null to use direct register control
   const getDeviceKindFromCommandAddr = (commandAddr: number): string | null => {
     const CONTROL_START_ADDR = 0x10
-    const deviceOrder = [
-      "heat",
-      "fan", 
-      "btsp",
-      "light_red",
-      "light_green",
-      "light_blue",
-      "light_white",
-      "display"
+    const deviceOrder: (string | null)[] = [
+      "heat",       // 0x10
+      "fan",        // 0x11 - backend only has "fan", not "fan1"
+      null,         // 0x12 - fan2 uses direct register control (no backend device kind)
+      "btsp",       // 0x13
+      "light_red",  // 0x14
+      "light_green",// 0x15
+      "light_blue", // 0x16
+      "light_white",// 0x17
     ]
-    
+
     const deviceIndex = commandAddr - CONTROL_START_ADDR
     if (deviceIndex >= 0 && deviceIndex < deviceOrder.length) {
       return deviceOrder[deviceIndex]
@@ -102,6 +104,7 @@ export function ShortcutsDisplay() {
               stateType={shortcut.stateType}
               statusAddr={shortcut.statusAddr}
               commandAddr={shortcut.commandAddr}
+              maxAddr={shortcut.maxAddr}
               stateValue={shortcut.stateValue}
               onToggle={() => handleToggleShortcut(shortcut)}
             />

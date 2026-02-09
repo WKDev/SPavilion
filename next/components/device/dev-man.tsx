@@ -5,29 +5,64 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { TMButton } from "@/components/device/tm-button"
-import { useStore, useShortcutStore } from "@/lib/store"
+import { useStore, useShortcutStore, type Shortcut } from "@/lib/store"
 import { api } from "@/lib/api"
 import { ShortcutsManager } from "@/components/device/shortcuts-manager"
 import { Settings } from "lucide-react"
 
 export function DevMan() {
-  const { plc } = useStore()
+  const { plc, triggerUsageHistRefresh } = useStore()
   const { shortcuts } = useShortcutStore()
   const [isManagerOpen, setIsManagerOpen] = useState(false)
+
+  // Map command addresses to backend-compatible device kinds
+  // Note: Backend only accepts: heat, fan, btsp, light_red, light_green, light_blue, light_white, display
+  // For fan2 (address 0x12), return null to use direct register control
+  const getDeviceKindFromCommandAddr = (commandAddr: number): string | null => {
+    const CONTROL_START_ADDR = 0x10
+    const deviceOrder: (string | null)[] = [
+      "heat",       // 0x10
+      "fan",        // 0x11 - backend only has "fan", not "fan1"
+      null,         // 0x12 - fan2 uses direct register control (no backend device kind)
+      "btsp",       // 0x13
+      "light_red",  // 0x14
+      "light_green",// 0x15
+      "light_blue", // 0x16
+      "light_white",// 0x17
+    ]
+
+    const deviceIndex = commandAddr - CONTROL_START_ADDR
+    if (deviceIndex >= 0 && deviceIndex < deviceOrder.length) {
+      return deviceOrder[deviceIndex]
+    }
+    return null
+  }
 
   /**
    * Shortcut toggle handler
    */
-  const handleToggleShortcut = async (shortcut: typeof shortcuts[0]) => {
+  const handleToggleShortcut = async (shortcut: Shortcut) => {
     try {
-      if (shortcut.stateType === "coil") {
-        const currentValue = plc.coils[shortcut.statusAddr] || false
-        await api.setPLCCoil(shortcut.commandAddr, !currentValue)
-      } else if (shortcut.stateType === "register") {
-        const currentValue = plc.registers[shortcut.statusAddr] || 0
-        const newValue = currentValue === 0 ? shortcut.stateValue : 0
-        await api.setPLCRegister(shortcut.commandAddr, newValue)
+      // Use momentary switch for rising edge detection
+      const deviceKind = getDeviceKindFromCommandAddr(shortcut.commandAddr)
+
+      if (deviceKind) {
+        console.log(`[DevMan] Executing momentary switch for ${deviceKind} (commandAddr: ${shortcut.commandAddr})`)
+        await api.momentarySwitch(deviceKind)
+        console.log(`[DevMan] Momentary switch completed for ${deviceKind}`)
+      } else {
+        console.error(`[DevMan] Invalid command address: ${shortcut.commandAddr}`)
+        // Fallback to original behavior for invalid addresses
+        if (shortcut.stateType === "coil") {
+          const currentValue = plc.coils[shortcut.statusAddr] || false
+          await api.setPLCCoil(shortcut.commandAddr, !currentValue)
+        } else {
+          const currentValue = plc.registers[shortcut.statusAddr] || 0
+          const newValue = currentValue === 0 ? shortcut.stateValue : 0
+          await api.setPLCRegister(shortcut.commandAddr, newValue)
+        }
       }
+      triggerUsageHistRefresh()
     } catch (error) {
       console.error("Failed to toggle shortcut:", error)
     }
@@ -70,6 +105,7 @@ export function DevMan() {
                   stateType={shortcut.stateType}
                   statusAddr={shortcut.statusAddr}
                   commandAddr={shortcut.commandAddr}
+                  maxAddr={shortcut.maxAddr}
                   stateValue={shortcut.stateValue}
                   onToggle={() => handleToggleShortcut(shortcut)}
                 />

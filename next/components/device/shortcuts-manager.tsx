@@ -14,62 +14,69 @@ interface ShortcutFormData {
   stateType: "coil" | "register"
   statusAddr: string
   commandAddr: string
+  maxAddr: string
   stateValue: string
 }
 
-// Default shortcuts configuration based on PLC addresses
-// Status Read: 0x00-0x07, Control Write: 0x10-0x17
+// Default shortcuts configuration based on PLC addresses (all decimal)
+// Status Read: 0-7, Control Write: 16-23, Max Timer: 20-27
 const DEFAULT_SHORTCUTS = [
   {
     buttonTitle: "열선",
     stateType: "register" as const,
-    statusAddr: 0x00,  // Read from 0x00
-    commandAddr: 0x10, // Write to 0x10
-    stateValue: 60,   // 1분
+    statusAddr: 0,   // D0000: current timer
+    commandAddr: 16, // D0016: command coil
+    maxAddr: 20,     // D0020: max timer
   },
   {
-    buttonTitle: "팬",
+    buttonTitle: "팬1",
     stateType: "register" as const,
-    statusAddr: 0x01,  // Read from 0x01
-    commandAddr: 0x11, // Write to 0x11
-    stateValue: 60,   // 1분
+    statusAddr: 1,
+    commandAddr: 17,
+    maxAddr: 21,
+  },
+  {
+    buttonTitle: "팬2",
+    stateType: "register" as const,
+    statusAddr: 2,
+    commandAddr: 18,
+    maxAddr: 22,
   },
   {
     buttonTitle: "블루투스 스피커",
     stateType: "register" as const,
-    statusAddr: 0x03,  // Read from 0x03
-    commandAddr: 0x13, // Write to 0x13
-    stateValue: 60,  // 1분
+    statusAddr: 3,
+    commandAddr: 19,
+    maxAddr: 23,
   },
   {
     buttonTitle: "적색 LED",
     stateType: "register" as const,
-    statusAddr: 0x04,  // Read from 0x04
-    commandAddr: 0x14, // Write to 0x14
-    stateValue: 60,  // 1분
+    statusAddr: 4,
+    commandAddr: 20,
+    maxAddr: 24,
   },
   {
     buttonTitle: "녹색 LED",
     stateType: "register" as const,
-    statusAddr: 0x05,  // Read from 0x05
-    commandAddr: 0x15, // Write to 0x15
-    stateValue: 60,  // 1분
+    statusAddr: 5,
+    commandAddr: 21,
+    maxAddr: 25,
   },
   {
     buttonTitle: "청색 LED",
     stateType: "register" as const,
-    statusAddr: 0x06,  // Read from 0x06
-    commandAddr: 0x16, // Write to 0x16
-    stateValue: 60,  // 1분
+    statusAddr: 6,
+    commandAddr: 22,
+    maxAddr: 26,
   },
   {
     buttonTitle: "백색 LED",
     stateType: "register" as const,
-    statusAddr: 0x07,  // Read from 0x07
-    commandAddr: 0x17, // Write to 0x17
-    stateValue: 60,  // 1분
+    statusAddr: 7,
+    commandAddr: 23,
+    maxAddr: 27,
   },
-
 ]
 
 export function ShortcutsManager() {
@@ -78,9 +85,10 @@ export function ShortcutsManager() {
   const [editingShortcut, setEditingShortcut] = useState<Shortcut | null>(null)
   const [formData, setFormData] = useState<ShortcutFormData>({
     buttonTitle: "",
-    stateType: "coil",
+    stateType: "register",
     statusAddr: "0",
     commandAddr: "16",
+    maxAddr: "32",
     stateValue: "600",
   })
 
@@ -91,10 +99,11 @@ export function ShortcutsManager() {
   const handleAddShortcut = () => {
     const statusAddr = parseInt(formData.statusAddr, 10)
     const commandAddr = parseInt(formData.commandAddr, 10)
-    const stateValue = parseInt(formData.stateValue, 10)
+    const maxAddr = formData.maxAddr ? parseInt(formData.maxAddr, 10) : undefined
+    const stateValue = formData.stateValue ? parseInt(formData.stateValue, 10) : undefined
 
-    if (isNaN(statusAddr) || isNaN(commandAddr) || isNaN(stateValue)) {
-      alert("Invalid address or value")
+    if (isNaN(statusAddr) || isNaN(commandAddr)) {
+      alert("Invalid address")
       return
     }
 
@@ -103,16 +112,18 @@ export function ShortcutsManager() {
       stateType: formData.stateType,
       statusAddr,
       commandAddr,
-      stateValue,
+      maxAddr: maxAddr && !isNaN(maxAddr) ? maxAddr : undefined,
+      stateValue: stateValue && !isNaN(stateValue) ? stateValue : undefined,
     })
 
     // Reset form
     setFormData({
       buttonTitle: "",
-      stateType: "coil",
+      stateType: "register",
       statusAddr: "0",
       commandAddr: "16",
-      stateValue: "600",
+      maxAddr: "32",
+      stateValue: "",
     })
     setIsAddDialogOpen(false)
   }
@@ -122,10 +133,11 @@ export function ShortcutsManager() {
 
     const statusAddr = parseInt(formData.statusAddr, 10)
     const commandAddr = parseInt(formData.commandAddr, 10)
-    const stateValue = parseInt(formData.stateValue, 10)
+    const maxAddr = formData.maxAddr ? parseInt(formData.maxAddr, 10) : undefined
+    const stateValue = formData.stateValue ? parseInt(formData.stateValue, 10) : undefined
 
-    if (isNaN(statusAddr) || isNaN(commandAddr) || isNaN(stateValue)) {
-      alert("Invalid address or value")
+    if (isNaN(statusAddr) || isNaN(commandAddr)) {
+      alert("Invalid address")
       return
     }
 
@@ -134,7 +146,8 @@ export function ShortcutsManager() {
       stateType: formData.stateType,
       statusAddr,
       commandAddr,
-      stateValue,
+      maxAddr: maxAddr && !isNaN(maxAddr) ? maxAddr : undefined,
+      stateValue: stateValue && !isNaN(stateValue) ? stateValue : undefined,
     })
 
     setEditingShortcut(null)
@@ -147,14 +160,15 @@ export function ShortcutsManager() {
       stateType: shortcut.stateType,
       statusAddr: shortcut.statusAddr.toString(),
       commandAddr: shortcut.commandAddr.toString(),
-      stateValue: shortcut.stateValue.toString(),
+      maxAddr: shortcut.maxAddr?.toString() || "",
+      stateValue: shortcut.stateValue?.toString() || "",
     })
   }
 
   const handleLoadDefaults = () => {
     const confirmMessage = shortcuts.length > 0
       ? "기존 shortcuts를 모두 삭제하고 기본값으로 재설정하시겠습니까?"
-      : "기본 shortcuts(Heat, Fan, BTSP, R, G, B, W, Display)를 추가하시겠습니까?"
+      : "기본 shortcuts(열선, 팬1, 팬2, BTSP, 적/녹/청/백 LED)를 추가하시겠습니까?"
 
     if (!confirm(confirmMessage)) {
       return
@@ -240,17 +254,33 @@ export function ShortcutsManager() {
                     </div>
                   </div>
                   {formData.stateType === "register" && (
-                    <div className="space-y-2">
-                      <Label htmlFor="add-value">최대 타이머 값 (seconds)</Label>
-                      <Input
-                        id="add-value"
-                        type="number"
-                        value={formData.stateValue}
-                        onChange={(e) => handleFormChange("stateValue", e.target.value)}
-                        placeholder="600 (10분)"
-                        min={0}
-                      />
-                    </div>
+                    <>
+                      <div className="space-y-2">
+                        <Label htmlFor="add-max-addr">최대값 register 주소 (Read)</Label>
+                        <Input
+                          id="add-max-addr"
+                          type="number"
+                          value={formData.maxAddr}
+                          onChange={(e) => handleFormChange("maxAddr", e.target.value)}
+                          placeholder="32 (0x20)"
+                          min={0}
+                          max={999}
+                        />
+                        <p className="text-xs text-muted-foreground">PLC에서 최대 타이머 값을 읽을 주소</p>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="add-value">최대값 Fallback (seconds)</Label>
+                        <Input
+                          id="add-value"
+                          type="number"
+                          value={formData.stateValue}
+                          onChange={(e) => handleFormChange("stateValue", e.target.value)}
+                          placeholder="600 (10분)"
+                          min={0}
+                        />
+                        <p className="text-xs text-muted-foreground">maxAddr가 0이면 이 값 사용</p>
+                      </div>
+                    </>
                   )}
                 </div>
                 <DialogFooter>
@@ -276,7 +306,7 @@ export function ShortcutsManager() {
                 <div className="font-medium">{shortcut.buttonTitle}</div>
                 <div className="text-xs text-muted-foreground">
                   {shortcut.stateType === "coil" ? "Coil" : "Register"} • Read: {shortcut.statusAddr} • Write: {shortcut.commandAddr}
-                  {shortcut.stateType === "register" && ` • Timer: ${shortcut.stateValue}s`}
+                  {shortcut.stateType === "register" && shortcut.maxAddr !== undefined && ` • Max: ${shortcut.maxAddr}`}
                 </div>
               </div>
               <div className="flex gap-1">
@@ -350,16 +380,31 @@ export function ShortcutsManager() {
                                 </div>
                               </div>
                               {formData.stateType === "register" && (
-                                <div className="space-y-2">
-                                  <Label htmlFor="edit-value">최대 타이머 값 (seconds)</Label>
-                                  <Input
-                                    id="edit-value"
-                                    type="number"
-                                    value={formData.stateValue}
-                                    onChange={(e) => handleFormChange("stateValue", e.target.value)}
-                                    min={0}
-                                  />
-                                </div>
+                                <>
+                                  <div className="space-y-2">
+                                    <Label htmlFor="edit-max-addr">최대값 register 주소 (Read)</Label>
+                                    <Input
+                                      id="edit-max-addr"
+                                      type="number"
+                                      value={formData.maxAddr}
+                                      onChange={(e) => handleFormChange("maxAddr", e.target.value)}
+                                      min={0}
+                                      max={999}
+                                    />
+                                    <p className="text-xs text-muted-foreground">PLC에서 최대 타이머 값을 읽을 주소</p>
+                                  </div>
+                                  <div className="space-y-2">
+                                    <Label htmlFor="edit-value">최대값 Fallback (seconds)</Label>
+                                    <Input
+                                      id="edit-value"
+                                      type="number"
+                                      value={formData.stateValue}
+                                      onChange={(e) => handleFormChange("stateValue", e.target.value)}
+                                      min={0}
+                                    />
+                                    <p className="text-xs text-muted-foreground">maxAddr가 0이면 이 값 사용</p>
+                                  </div>
+                                </>
                               )}
                             </div>
                             <DialogFooter>

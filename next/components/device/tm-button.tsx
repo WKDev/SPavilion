@@ -13,7 +13,8 @@ interface TMButtonProps {
   stateType?: "coil" | "register" | "legacy"
   statusAddr?: number   // Address to read state from
   commandAddr?: number  // Address to write commands to (not used for display, only for API calls)
-  stateValue?: number
+  maxAddr?: number      // Address to read max timer value from PLC register
+  stateValue?: number   // Fallback max value if maxAddr not provided
 }
 
 export function TMButton({
@@ -24,6 +25,7 @@ export function TMButton({
   stateType = "legacy",
   statusAddr,
   commandAddr,
+  maxAddr,
   stateValue
 }: TMButtonProps) {
   const { plc } = useStore()
@@ -52,8 +54,12 @@ export function TMButton({
       // If register value > 0, it's on (timer running)
       setIsOn(registerValue > 0)
 
-      // Calculate progress (assuming max value if stateValue is provided, else 600s = 10min default)
-      const maxSeconds = stateValue || 600
+      // Read max value from PLC register if maxAddr provided, else use stateValue fallback
+      const maxRegisterValue = maxAddr !== undefined ? (plc.registers[maxAddr] || 0) : 0
+      const maxSeconds = maxRegisterValue > 0
+        ? Math.floor(maxRegisterValue / 10)  // Convert from 100ms units
+        : (stateValue || 600)                 // Fallback to stateValue or 600s default
+
       const percent = maxSeconds > 0 ? (totalSeconds / maxSeconds) * 100 : 0
       setProgressPercent(Math.min(percent, 100))
 
@@ -62,7 +68,7 @@ export function TMButton({
       const seconds = totalSeconds % 60
       setRemainText(`${minutes}:${seconds.toString().padStart(2, '0')}`)
     }
-  }, [stateType, statusAddr, commandAddr, stateValue, legacyIsOn, legacyProgress, plc.coils, plc.registers])
+  }, [stateType, statusAddr, commandAddr, maxAddr, stateValue, legacyIsOn, legacyProgress, plc.coils, plc.registers])
 
   return (
     <Button

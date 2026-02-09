@@ -4,6 +4,7 @@ import { persist } from "zustand/middleware"
 export interface DeviceState {
   heat: { isOn: boolean; progress: number }
   fan: { isOn: boolean; progress: number }
+  fan2: { isOn: boolean; progress: number }
   btsp: { isOn: boolean; progress: number }
   "light-red": { isOn: boolean; progress: number }
   "light-green": { isOn: boolean; progress: number }
@@ -48,6 +49,7 @@ interface AppState {
   plc: PLCState
   isPolling: boolean
   timeRange: TimeRangeState
+  usageHistRefreshKey: number
   updateDevice: (device: keyof DeviceState, state: { isOn: boolean; progress: number }) => void
   updateCoil: (index: number, value: boolean) => void
   updateRegister: (index: number, value: number) => void
@@ -55,6 +57,7 @@ interface AppState {
   setTimeRange: (range: TimeRange) => void
   setCustomTimeRange: (from: Date, to: Date, fromTime: string, toTime: string, label: string) => void
   setTodayRange: () => void
+  triggerUsageHistRefresh: () => void
 }
 
 export const useStore = create<AppState>((set) => {
@@ -68,6 +71,7 @@ export const useStore = create<AppState>((set) => {
     devices: {
       heat: { isOn: false, progress: 0 },
       fan: { isOn: false, progress: 0 },
+      fan2: { isOn: false, progress: 0 },
       btsp: { isOn: false, progress: 0 },
       "light-red": { isOn: false, progress: 0 },
       "light-green": { isOn: false, progress: 0 },
@@ -88,6 +92,7 @@ export const useStore = create<AppState>((set) => {
     },
 
     isPolling: false,
+    usageHistRefreshKey: 0,
     updateDevice: (device, state) =>
       set((prev) => ({
         devices: {
@@ -193,6 +198,10 @@ export const useStore = create<AppState>((set) => {
         },
       }))
     },
+    triggerUsageHistRefresh: () =>
+      set((prev) => ({
+        usageHistRefreshKey: prev.usageHistRefreshKey + 1,
+      })),
   }
 })
 
@@ -233,7 +242,8 @@ export interface Shortcut {
   stateType: "coil" | "register"
   statusAddr: number  // Address to read current state from (e.g., 0x00-0x07)
   commandAddr: number // Address to write commands to (e.g., 0x10-0x17)
-  stateValue: number  // Max value for timer (used for register type)
+  maxAddr?: number    // Address to read max timer value from (e.g., 0x20-0x27)
+  stateValue?: number // Fallback max value if maxAddr not provided
 }
 
 interface ShortcutState {
@@ -269,46 +279,3 @@ export const useShortcutStore = create<ShortcutState>()(
   )
 )
 
-// DevMan Button interface for custom device control buttons
-export interface DevManButton {
-  id: string
-  buttonTitle: string
-  deviceKey?: keyof DeviceState // For legacy device state (heat, fan, etc.)
-  stateType: "legacy" | "coil" | "register"
-  statusAddr?: number  // Address to read current state from (for coil/register types)
-  commandAddr?: number // Address to write commands to (for coil/register types)
-  stateValue?: number  // Max value for timer (used for register type)
-}
-
-interface DevManButtonState {
-  buttons: DevManButton[]
-  addButton: (button: Omit<DevManButton, "id">) => void
-  updateButton: (id: string, button: Omit<DevManButton, "id">) => void
-  removeButton: (id: string) => void
-}
-
-export const useDevManButtonStore = create<DevManButtonState>()(
-  persist(
-    (set) => ({
-      buttons: [],
-      addButton: (button) =>
-        set((state) => ({
-          buttons: [
-            ...state.buttons,
-            { ...button, id: `devman-${Date.now()}-${Math.random().toString(36).substring(2, 9)}` },
-          ],
-        })),
-      updateButton: (id, button) =>
-        set((state) => ({
-          buttons: state.buttons.map((b) => (b.id === id ? { ...button, id } : b)),
-        })),
-      removeButton: (id) =>
-        set((state) => ({
-          buttons: state.buttons.filter((b) => b.id !== id),
-        })),
-    }),
-    {
-      name: "devman-button-storage",
-    }
-  )
-)
